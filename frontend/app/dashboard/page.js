@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { api, getToken, getUser, removeToken } from '@/lib/api';
-import ThemeToggle from '@/components/ThemeToggle';
-import FinFlowLogo from '@/components/FinFlowLogo';
+import Navbar from '@/components/Navbar';
+import TransferModal from '@/components/TransferModal';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -15,6 +15,8 @@ export default function DashboardPage() {
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [popup, setPopup] = useState(null); // { type: 'error' | 'success', message: string }
+  const [isTransferOpen, setIsTransferOpen] = useState(false);
+  const [copiedId, setCopiedId] = useState(null);
 
   const showPopup = (type, message) => {
     setPopup({ type, message });
@@ -33,6 +35,23 @@ export default function DashboardPage() {
     return () => clearTimeout(timer);
   }, [popup]);
 
+  const fetchAccounts = async () => {
+    try {
+      const response = await api.get('/accounts');
+      const fetchedAccounts = response.data || [];
+      setAccounts(fetchedAccounts);
+
+      // If user has zero accounts, guide them to create their first account
+      if (fetchedAccounts.length === 0) {
+        router.replace('/create-account');
+      }
+    } catch (err) {
+      showPopup('error', err.message || 'Failed to fetch account information.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     const token = getToken();
     if (!token) {
@@ -43,25 +62,19 @@ export default function DashboardPage() {
     const cachedUser = getUser();
     setUser(cachedUser);
 
-    const fetchAccounts = async () => {
-      try {
-        const response = await api.get('/accounts');
-        const fetchedAccounts = response.data || [];
-        setAccounts(fetchedAccounts);
-
-        // If user has zero accounts, guide them to create their first account
-        if (fetchedAccounts.length === 0) {
-          router.replace('/create-account');
-        }
-      } catch (err) {
-        showPopup('error', err.message || 'Failed to fetch account information.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchAccounts();
   }, [router]);
+
+  const handleTransferSuccess = (result) => {
+    showPopup('success', `Transfer of ₹${parseFloat(result.transaction.amount).toFixed(2)} completed successfully!`);
+    fetchAccounts();
+  };
+
+  const handleCopyId = (id) => {
+    navigator.clipboard.writeText(id);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   const handleLogout = () => {
     removeToken();
@@ -176,41 +189,8 @@ export default function DashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* Top Navigation Bar with Framer Motion slide-in */}
-      <motion.header
-        initial={{ opacity: 0, y: -15 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: 'easeOut' }}
-        className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 sticky top-0 z-40 transition-colors duration-300"
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link href="/dashboard" className="group">
-            <FinFlowLogo size="md" subtitle="DASHBOARD" />
-          </Link>
-
-          <div className="flex items-center gap-3 sm:gap-4">
-            <ThemeToggle />
-
-            <div className="text-right hidden sm:block border-l border-slate-200 dark:border-slate-800 pl-4">
-              <p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">
-                {user?.name || 'FinFlow User'}
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {user?.email || ''}
-              </p>
-            </div>
-
-            <motion.button
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={handleLogout}
-              className="px-3.5 py-2 text-sm font-semibold rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
-            >
-              Log Out
-            </motion.button>
-          </div>
-        </div>
-      </motion.header>
+      {/* Shared Navigation Bar */}
+      <Navbar onOpenTransfer={() => setIsTransferOpen(true)} />
 
       {/* Main Dashboard Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -244,12 +224,22 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="z-10">
+          <div className="z-10 flex flex-wrap items-center gap-3">
+            <motion.button
+              whileHover={{ scale: 1.04, y: -2 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setIsTransferOpen(true)}
+              className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold px-6 py-3.5 rounded-xl shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-200 cursor-pointer text-sm"
+            >
+              <span className="text-lg leading-none">💸</span>
+              <span>Transfer Money</span>
+            </motion.button>
+
             <Link href="/create-account">
               <motion.div
                 whileHover={{ scale: 1.04, y: -2 }}
                 whileTap={{ scale: 0.97 }}
-                className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold px-6 py-3.5 rounded-xl shadow-lg shadow-sky-500/25 hover:shadow-sky-500/40 transition-all duration-200 cursor-pointer text-sm"
+                className="inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 text-white font-bold px-5 py-3.5 rounded-xl border border-white/15 backdrop-blur-sm transition-all duration-200 cursor-pointer text-sm"
               >
                 <span className="text-lg leading-none">+</span>
                 <span>Create New Account</span>
@@ -348,9 +338,15 @@ export default function DashboardPage() {
                     <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center text-xs text-slate-500 dark:text-slate-400">
                       <span className="font-semibold">Currency: {acc.currency || 'INR'}</span>
                       {acc.id && (
-                        <span title={acc.id} className="font-mono text-[11px] opacity-75">
-                          ID: {acc.id.slice(0, 8)}...
-                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyId(acc.id)}
+                          title="Click to copy full Account UUID"
+                          className="inline-flex items-center gap-1 font-mono text-[11px] px-2 py-0.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+                        >
+                          <span>{copiedId === acc.id ? '✓ Copied' : `ID: ${acc.id.slice(0, 8)}...`}</span>
+                          <span className="opacity-50">📋</span>
+                        </button>
                       )}
                     </div>
                   </motion.div>
@@ -360,6 +356,14 @@ export default function DashboardPage() {
           )}
         </section>
       </main>
+
+      {/* Transfer Money Modal */}
+      <TransferModal
+        isOpen={isTransferOpen}
+        onClose={() => setIsTransferOpen(false)}
+        accounts={accounts}
+        onSuccess={handleTransferSuccess}
+      />
     </div>
   );
 }

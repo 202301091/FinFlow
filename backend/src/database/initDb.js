@@ -13,7 +13,7 @@ export const initDb = async () => {
 
     console.log('Applying database schema to PostgreSQL...');
     await pool.query(schemaSql);
-    console.log('✓ Database tables (users, accounts) created successfully!');
+    console.log('✓ Database tables (users, accounts, transactions) and indexes created successfully!');
   } catch (error) {
     console.error('Error initializing database:', error.message);
     throw error;

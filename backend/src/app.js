@@ -7,6 +7,7 @@ import { ApiResponse } from './utils/ApiResponse.js';
 // Route imports
 import userRouter from './routes/user.routes.js';
 import accountRouter from './routes/account.routes.js';
+import transactionRouter from './routes/transaction.routes.js';
 
 const app = express();
 
@@ -30,6 +31,7 @@ app.get('/health', (req, res) => {
 // API Routes
 app.use('/api/v1/users', userRouter);
 app.use('/api/v1/accounts', accountRouter);
+app.use('/api/v1/transactions', transactionRouter);
 
 // Global error handling middleware (must be after routes)
 app.use((err, req, res, next) => {
