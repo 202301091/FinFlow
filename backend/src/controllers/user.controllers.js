@@ -2,6 +2,7 @@ import bcrypt from 'bcrypt';
 import { pool } from '../config/db.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
+import { createAuditLog } from '../services/audit.service.js';
 import jwt from 'jsonwebtoken';
 
 const generateToken = (user) => {
@@ -32,6 +33,16 @@ const createUser = async (req, res) => {
     const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
 
     if (existingUser.rows.length > 0) {
+      await createAuditLog({
+        userId: null,
+        action: 'USER_REGISTRATION_FAILED',
+        resourceType: 'user',
+        resourceId: null,
+        requestId: req.id,
+        status: 'FAILURE',
+        metadata: { email, reason: 'User already exists with this email' },
+      });
+
       return res
         .status(409)
         .json(new ApiError(409, "User already exists with this email"));
@@ -46,9 +57,22 @@ const createUser = async (req, res) => {
       [name, email, hashedPassword]
     );
 
+    const createdUser = newUser.rows[0];
+
+    // Record audit log for user registration
+    await createAuditLog({
+      userId: createdUser.id,
+      action: 'USER_REGISTERED',
+      resourceType: 'user',
+      resourceId: createdUser.id,
+      requestId: req.id,
+      status: 'SUCCESS',
+      metadata: { name: createdUser.name, email: createdUser.email },
+    });
+
     return res
       .status(201)
-      .json(new ApiResponse(201, newUser.rows[0], "User created successfully"));
+      .json(new ApiResponse(201, createdUser, "User created successfully"));
   } catch (error) {
     console.error('Error creating user:', error);
     return res
@@ -71,6 +95,16 @@ const loginUser = async (req, res) => {
     const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
 
     if (userResult.rows.length === 0) {
+      await createAuditLog({
+        userId: null,
+        action: 'USER_LOGIN_FAILED',
+        resourceType: 'user',
+        resourceId: null,
+        requestId: req.id,
+        status: 'FAILURE',
+        metadata: { email, reason: 'Email not found' },
+      });
+
       return res
         .status(404)
         .json(new ApiError(404, "Email not found"));
@@ -78,10 +112,20 @@ const loginUser = async (req, res) => {
 
     const user = userResult.rows[0];
 
-    // Compare the provided password with the hashed password in the database (schema uses password_hash)
+    // Compare the provided password with the hashed password in the database
     const isPasswordValid = await bcrypt.compare(password, user.password_hash || user.password);
 
     if (!isPasswordValid) {
+      await createAuditLog({
+        userId: user.id,
+        action: 'USER_LOGIN_FAILED',
+        resourceType: 'user',
+        resourceId: user.id,
+        requestId: req.id,
+        status: 'FAILURE',
+        metadata: { email, reason: 'Invalid password' },
+      });
+
       return res
         .status(401)
         .json(new ApiError(401, "Invalid password"));
@@ -92,6 +136,17 @@ const loginUser = async (req, res) => {
     const loggedInUser = { ...user };
     delete loggedInUser.password;
     delete loggedInUser.password_hash;
+
+    // Record audit log for successful login
+    await createAuditLog({
+      userId: user.id,
+      action: 'USER_LOGIN_SUCCESS',
+      resourceType: 'user',
+      resourceId: user.id,
+      requestId: req.id,
+      status: 'SUCCESS',
+      metadata: { email: user.email },
+    });
 
     return res
       .status(200)

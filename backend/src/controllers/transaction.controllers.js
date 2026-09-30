@@ -5,10 +5,18 @@ import {
   getTransactionHistory,
   getTransactionById,
 } from '../services/transaction.service.js';
+import {
+  computeRequestHash,
+  checkOrCreateIdempotencyKey,
+  markIdempotencyCompleted,
+  markIdempotencyFailed,
+} from '../services/idempotency.service.js';
+import { createAuditLog } from '../services/audit.service.js';
 
 /**
  * Handle money transfer between accounts
  * POST /api/v1/transactions/transfer
+ * Requires Idempotency-Key header
  */
 export const transferMoney = async (req, res, next) => {
   try {
@@ -17,6 +25,18 @@ export const transferMoney = async (req, res, next) => {
       throw new ApiError(401, 'User authentication required');
     }
 
+    // Extract Idempotency-Key from headers (or fallback to body if provided)
+    const idempotencyKey =
+      req.header('idempotency-key') ||
+      req.header('Idempotency-Key') ||
+      req.headers['idempotency-key'] ||
+      req.body?.idempotency_key;
+
+    if (!idempotencyKey || typeof idempotencyKey !== 'string' || !idempotencyKey.trim()) {
+      throw new ApiError(400, 'Idempotency-Key header is required for transfer requests');
+    }
+
+    const trimmedKey = idempotencyKey.trim();
     const { receiverAccountId, amount, description, senderAccountId } = req.body;
 
     // Validate presence of required fields
@@ -33,18 +53,89 @@ export const transferMoney = async (req, res, next) => {
       throw new ApiError(400, 'Amount must be a positive number greater than zero');
     }
 
-    // Execute atomic transfer via transaction service
-    const result = await transferFunds({
-      userId,
-      senderAccountId,
+    // Compute deterministic request hash
+    const requestPayload = {
+      senderAccountId: senderAccountId || null,
       receiverAccountId,
       amount: numericAmount,
-      description,
+      description: description ? description.trim() : null,
+    };
+    const requestHash = computeRequestHash(requestPayload);
+
+    // Coordinate with idempotency record
+    const idempotency = await checkOrCreateIdempotencyKey({
+      key: trimmedKey,
+      userId,
+      requestPath: req.baseUrl ? `${req.baseUrl}/transfer` : '/api/v1/transactions/transfer',
+      requestHash,
     });
 
-    return res
-      .status(200)
-      .json(new ApiResponse(200, result, 'Transfer completed successfully'));
+    // If already completed with identical payload, replay cached response
+    if (idempotency.isReplay) {
+      res.setHeader('Idempotency-Replayed', 'true');
+      return res.status(idempotency.responseStatus || 200).json(idempotency.responseBody);
+    }
+
+    try {
+      // Execute atomic transfer via transaction service
+      const result = await transferFunds({
+        userId,
+        senderAccountId,
+        receiverAccountId,
+        amount: numericAmount,
+        description,
+      });
+
+      const responsePayload = new ApiResponse(200, result, 'Transfer completed successfully');
+
+      // Persist successful response in idempotency_keys
+      await markIdempotencyCompleted({
+        key: trimmedKey,
+        userId,
+        statusCode: 200,
+        responseBody: responsePayload,
+      });
+
+      // Record immutable audit log for completed transfer
+      await createAuditLog({
+        userId,
+        action: 'TRANSFER_COMPLETED',
+        resourceType: 'transaction',
+        resourceId: result.transaction.id,
+        requestId: req.id,
+        status: 'SUCCESS',
+        metadata: {
+          amount: numericAmount,
+          senderAccountId: result.sender.accountId,
+          receiverAccountId: result.receiver.accountId,
+          senderNewBalance: result.sender.newBalance,
+          description: description ? description.trim() : null,
+        },
+      });
+
+      return res.status(200).json(responsePayload);
+    } catch (transferError) {
+      // Mark key failed so future attempts or retries can be processed cleanly
+      await markIdempotencyFailed({ key: trimmedKey, userId });
+
+      // Record audit log for failed transfer attempt
+      await createAuditLog({
+        userId,
+        action: 'TRANSFER_FAILED',
+        resourceType: 'transaction',
+        resourceId: null,
+        requestId: req.id,
+        status: 'FAILURE',
+        metadata: {
+          amount: numericAmount,
+          senderAccountId: senderAccountId || null,
+          receiverAccountId,
+          errorMessage: transferError.message,
+        },
+      });
+
+      throw transferError;
+    }
   } catch (error) {
     next(error);
   }

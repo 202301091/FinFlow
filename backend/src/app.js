@@ -3,6 +3,8 @@ import cookieParser from 'cookie-parser';
 import cors from 'cors';
 import { ApiError } from './utils/ApiError.js';
 import { ApiResponse } from './utils/ApiResponse.js';
+import { requestIdMiddleware } from './middleware/requestId.middleware.js';
+import { errorHandler } from './middleware/error.middleware.js';
 
 // Route imports
 import userRouter from './routes/user.routes.js';
@@ -10,6 +12,9 @@ import accountRouter from './routes/account.routes.js';
 import transactionRouter from './routes/transaction.routes.js';
 
 const app = express();
+
+// Attach Request ID middleware early for all requests and logging
+app.use(requestIdMiddleware);
 
 app.use(cors({
     origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
@@ -34,13 +39,6 @@ app.use('/api/v1/accounts', accountRouter);
 app.use('/api/v1/transactions', transactionRouter);
 
 // Global error handling middleware (must be after routes)
-app.use((err, req, res, next) => {
-    if (err instanceof ApiError) {
-        return res.status(err.statusCode).json(err);
-    }
-    return res.status(500).json(
-        new ApiError(500, err?.message || 'Internal Server Error')
-    );
-});
+app.use(errorHandler);
 
 export default app;

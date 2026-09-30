@@ -7,7 +7,7 @@
     "dev": "nodemon -r dotenv/config --experimental-json-modules src/index.js",
     "start": "node -r dotenv/config --experimental-json-modules src/index.js",
     "db:init": "node -r dotenv/config --experimental-json-modules src/database/initDb.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node -r dotenv/config --test --test-concurrency=1 tests/"
   },
   "author": "Meet Patel",
   "license": "ISC",

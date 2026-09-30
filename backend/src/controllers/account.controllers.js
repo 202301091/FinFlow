@@ -1,6 +1,7 @@
 import { pool } from '../config/db.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
+import { createAuditLog } from '../services/audit.service.js';
 
 const createAccount = async (req, res) => {
     const { account_type, balance } = req.body;
@@ -29,6 +30,15 @@ const createAccount = async (req, res) => {
         );
 
         if (existingAccount.rows.length > 0) {
+            await createAuditLog({
+                userId: user_id,
+                action: 'ACCOUNT_CREATION_FAILED',
+                resourceType: 'account',
+                resourceId: null,
+                requestId: req.id,
+                status: 'FAILURE',
+                metadata: { accountType: normalizedType, reason: `User already has a ${normalizedType} account` },
+            });
             return res.status(409).json(new ApiError(409, `User already has a ${normalizedType} account`));
         }
 
@@ -38,7 +48,24 @@ const createAccount = async (req, res) => {
             [user_id, normalizedType, initialBalance]
         );
 
-        return res.status(201).json(new ApiResponse(201, newAccount.rows[0], "Account created successfully"));
+        const createdAccount = newAccount.rows[0];
+
+        // Record audit log for account creation
+        await createAuditLog({
+            userId: user_id,
+            action: 'ACCOUNT_CREATED',
+            resourceType: 'account',
+            resourceId: createdAccount.id,
+            requestId: req.id,
+            status: 'SUCCESS',
+            metadata: {
+                accountType: createdAccount.account_type,
+                initialBalance: parseFloat(createdAccount.balance),
+                currency: createdAccount.currency,
+            },
+        });
+
+        return res.status(201).json(new ApiResponse(201, createdAccount, "Account created successfully"));
     } catch (error) {
         console.error('Error creating account:', error);
         return res.status(500).json(new ApiError(500, error?.message || "Internal server error"));
