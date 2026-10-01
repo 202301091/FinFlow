@@ -12,6 +12,7 @@ import {
   markIdempotencyFailed,
 } from '../services/idempotency.service.js';
 import { createAuditLog } from '../services/audit.service.js';
+import { getCache, setCache } from '../utils/redis.util.js';
 
 /**
  * Handle money transfer between accounts
@@ -40,7 +41,7 @@ export const transferMoney = async (req, res, next) => {
     const { receiverAccountId, amount, description, senderAccountId } = req.body;
 
     // Validate presence of required fields
-    if (!receiverAccountId) {
+    if (!receiverAccountId || typeof receiverAccountId !== 'string' || !receiverAccountId.trim()) {
       throw new ApiError(400, 'Receiver account ID (receiverAccountId) is required');
     }
 
@@ -53,10 +54,21 @@ export const transferMoney = async (req, res, next) => {
       throw new ApiError(400, 'Amount must be a positive number greater than zero');
     }
 
+    if (!senderAccountId || typeof senderAccountId !== 'string' || !senderAccountId.trim()) {
+      throw new ApiError(400, 'Sender account ID (senderAccountId) is required');
+    }
+
+    const trimmedSenderId = senderAccountId.trim();
+    const trimmedReceiverId = receiverAccountId.trim();
+
+    if (trimmedSenderId === trimmedReceiverId) {
+      throw new ApiError(400, 'Sender and receiver accounts cannot be the same');
+    }
+
     // Compute deterministic request hash
     const requestPayload = {
-      senderAccountId: senderAccountId || null,
-      receiverAccountId,
+      senderAccountId: trimmedSenderId,
+      receiverAccountId: trimmedReceiverId,
       amount: numericAmount,
       description: description ? description.trim() : null,
     };
@@ -80,8 +92,8 @@ export const transferMoney = async (req, res, next) => {
       // Execute atomic transfer via transaction service
       const result = await transferFunds({
         userId,
-        senderAccountId,
-        receiverAccountId,
+        senderAccountId: trimmedSenderId,
+        receiverAccountId: trimmedReceiverId,
         amount: numericAmount,
         description,
       });
@@ -112,6 +124,7 @@ export const transferMoney = async (req, res, next) => {
           description: description ? description.trim() : null,
         },
       });
+
 
       return res.status(200).json(responsePayload);
     } catch (transferError) {
@@ -182,10 +195,23 @@ export const getTransactionDetails = async (req, res, next) => {
 
     const { id } = req.params;
 
+    // Get transaction from cache if available
+    const cacheKey = `transaction:${userId}:${id}`;
+    const cachedTransaction = await getCache(cacheKey);
+
+    if (cachedTransaction) {
+      return res
+        .status(200)
+        .json(new ApiResponse(200, cachedTransaction, 'Transaction details retrieved successfully (from cache)'));
+    }
+
     const transaction = await getTransactionById({
       userId,
       transactionId: id,
     });
+
+    // Cache the transaction details for future requests (5 minutes)
+    await setCache(cacheKey, transaction, 300);
 
     return res
       .status(200)

@@ -3,12 +3,16 @@ dotenv.config({ path: './.env' });
 
 import { connectDB } from './config/db.js';
 import { initDb } from './database/initDb.js';
+import { connectRedis } from './config/redis.js';
 import app from './app.js';
 
 const startServer = async () => {
   try {
     await connectDB();
-    await initDb();
+    // await initDb();
+    await connectRedis();
+
+    
 
     app.on('error', (err) => {
       console.error(`Connection error: ${err.message}`);

@@ -21,7 +21,8 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.16.5",
     "pg": "^8.23.0",
-    "prettier": "^3.6.2"
+    "prettier": "^3.6.2",
+    "redis": "^6.3.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

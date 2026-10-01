@@ -1,6 +1,6 @@
 import { pool } from '../config/db.js';
 import { ApiError } from '../utils/ApiError.js';
-
+import { deleteCache } from '../utils/redis.util.js';
 /**
  * Execute an atomic financial transfer between two accounts.
  *
@@ -20,8 +20,19 @@ export const transferFunds = async ({
   description = null,
 }) => {
   // 1. Basic input validation
-  if (!receiverAccountId || typeof receiverAccountId !== 'string') {
+  if (!senderAccountId || typeof senderAccountId !== 'string' || !senderAccountId.trim()) {
+    throw new ApiError(400, 'A valid sender account ID is required');
+  }
+
+  if (!receiverAccountId || typeof receiverAccountId !== 'string' || !receiverAccountId.trim()) {
     throw new ApiError(400, 'A valid receiver account ID is required');
+  }
+
+  const trimmedSenderId = senderAccountId.trim();
+  const trimmedReceiverId = receiverAccountId.trim();
+
+  if (trimmedSenderId === trimmedReceiverId) {
+    throw new ApiError(400, 'Sender and receiver accounts cannot be the same');
   }
 
   const transferAmount = Number(amount);
@@ -40,40 +51,37 @@ export const transferFunds = async ({
     // 2. Begin database transaction
     await client.query('BEGIN');
 
-    // 3. Resolve the sender account belonging to authenticated user
-    let senderQuery = 'SELECT * FROM accounts WHERE user_id = $1 AND status = $2';
-    const senderParams = [userId, 'active'];
+    // 3. Resolve and verify sender account belongs to authenticated user
+    const senderLookup = await client.query(
+      'SELECT id, user_id, status FROM accounts WHERE id = $1',
+      [trimmedSenderId]
+    );
 
-    if (senderAccountId) {
-      senderQuery += ' AND id = $3';
-      senderParams.push(senderAccountId);
-    } else {
-      senderQuery += ' ORDER BY created_at ASC LIMIT 1';
+    if (senderLookup.rows.length === 0) {
+      throw new ApiError(404, 'Specified sender account not found');
     }
 
-    const senderLookup = await client.query(senderQuery, senderParams);
-    if (senderLookup.rows.length === 0) {
-      throw new ApiError(
-        404,
-        senderAccountId
-          ? 'Specified sender account not found or does not belong to you'
-          : 'No active account found for current user'
-      );
+    if (senderLookup.rows[0].user_id !== userId) {
+      throw new ApiError(403, 'Unauthorized: You do not own this account');
+    }
+
+    if (senderLookup.rows[0].status !== 'active') {
+      throw new ApiError(400, 'Sender account is not active');
     }
 
     const resolvedSenderId = senderLookup.rows[0].id;
 
     // 4. Validate sender and receiver are distinct
-    if (resolvedSenderId === receiverAccountId) {
+    if (resolvedSenderId === trimmedReceiverId) {
       throw new ApiError(400, 'Sender and receiver accounts cannot be the same');
     }
 
     // 5. Deadlock-free row-level locking:
     // Lock both accounts in deterministic lexicographical order of their UUIDs
-    const [firstId, secondId] = [resolvedSenderId, receiverAccountId].sort();
+    const [firstId, secondId] = [resolvedSenderId, trimmedReceiverId].sort();
 
     const lockedAccountsResult = await client.query(
-      `SELECT id, user_id, balance, currency, status 
+      `SELECT id, user_id, account_type, balance, currency, status 
        FROM accounts 
        WHERE id IN ($1, $2) 
        ORDER BY id 
@@ -152,8 +160,18 @@ export const transferFunds = async ({
       ]
     );
 
-    // 10. Commit the transaction to disk
+    // 10. Commit the transaction to disk (authoritative state confirmed)
     await client.query('COMMIT');
+
+    // 11. Invalidate affected account caches for both sender and receiver
+    await deleteCache(
+      `accounts:${userId}:${senderAccount.account_type}`,
+      `accounts:${userId}:all`,
+      `accounts:${receiverAccount.user_id}:${receiverAccount.account_type}`,
+      `accounts:${receiverAccount.user_id}:all`
+    );
+
+
 
     return {
       transaction: transactionInsert.rows[0],
