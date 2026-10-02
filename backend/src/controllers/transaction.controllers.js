@@ -96,6 +96,7 @@ export const transferMoney = async (req, res, next) => {
         receiverAccountId: trimmedReceiverId,
         amount: numericAmount,
         description,
+        requestId: req.id,
       });
 
       const responsePayload = new ApiResponse(200, result, 'Transfer completed successfully');

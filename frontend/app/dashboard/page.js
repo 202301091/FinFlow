@@ -46,6 +46,7 @@ export default function DashboardPage() {
         router.replace('/create-account');
       }
     } catch (err) {
+      
       showPopup('error', err.message || 'Failed to fetch account information.');
     } finally {
       setLoading(false);

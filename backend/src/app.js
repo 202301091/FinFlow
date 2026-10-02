@@ -10,6 +10,8 @@ import { errorHandler } from './middleware/error.middleware.js';
 import userRouter from './routes/user.routes.js';
 import accountRouter from './routes/account.routes.js';
 import transactionRouter from './routes/transaction.routes.js';
+import notificationRouter from './routes/notification.routes.js';
+import fraudRouter from './routes/fraud.routes.js';
 
 const app = express();
 
@@ -37,6 +39,8 @@ app.get('/health', (req, res) => {
 app.use('/api/v1/users', userRouter);
 app.use('/api/v1/accounts', accountRouter);
 app.use('/api/v1/transactions', transactionRouter);
+app.use('/api/v1/notifications', notificationRouter);
+app.use('/api/v1/fraud', fraudRouter);
 
 // Global error handling middleware (must be after routes)
 app.use(errorHandler);

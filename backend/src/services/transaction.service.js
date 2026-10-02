@@ -1,6 +1,10 @@
 import { pool } from '../config/db.js';
 import { ApiError } from '../utils/ApiError.js';
 import { deleteCache } from '../utils/redis.util.js';
+import { createTransferNotifications } from './notification.service.js';
+import { evaluateAndRecordTransferRisk } from './fraud.service.js';
+import { createTransactionCompletedEvent } from '../events/transaction.event.js';
+import { writeOutboxEvent, processPendingOutboxEvents } from './outbox.service.js';
 /**
  * Execute an atomic financial transfer between two accounts.
  *
@@ -10,6 +14,7 @@ import { deleteCache } from '../utils/redis.util.js';
  * @param {string} params.receiverAccountId - Destination account ID
  * @param {number} params.amount - Positive transfer amount
  * @param {string} [params.description] - Purpose/memo for the transaction
+ * @param {string} [params.requestId] - Optional unique request tracing identifier
  * @returns {Promise<Object>} The completed transaction record with balances
  */
 export const transferFunds = async ({
@@ -18,6 +23,7 @@ export const transferFunds = async ({
   receiverAccountId,
   amount,
   description = null,
+  requestId = null,
 }) => {
   // 1. Basic input validation
   if (!senderAccountId || typeof senderAccountId !== 'string' || !senderAccountId.trim()) {
@@ -160,6 +166,27 @@ export const transferFunds = async ({
       ]
     );
 
+    // 9.5. Write TRANSACTION_COMPLETED event to Transactional Outbox (same atomic boundary)
+    const completedEvent = createTransactionCompletedEvent({
+      transaction: transactionInsert.rows[0],
+      senderUserId: userId,
+      receiverUserId: receiverAccount.user_id,
+      senderAccountId: resolvedSenderId,
+      receiverAccountId,
+      amount: transferAmount,
+      currency: senderAccount.currency || 'INR',
+      description,
+      requestId,
+    });
+
+    await writeOutboxEvent({
+      client,
+      aggregateId: transactionInsert.rows[0].id,
+      eventType: completedEvent.eventType,
+      payload: completedEvent,
+      partitionKey: resolvedSenderId,
+    });
+
     // 10. Commit the transaction to disk (authoritative state confirmed)
     await client.query('COMMIT');
 
@@ -170,6 +197,41 @@ export const transferFunds = async ({
       `accounts:${receiverAccount.user_id}:${receiverAccount.account_type}`,
       `accounts:${receiverAccount.user_id}:all`
     );
+
+    // 12. Dispatch transfer notifications to both sender and receiver
+    try {
+      await createTransferNotifications({
+        transaction: transactionInsert.rows[0],
+        senderUserId: userId,
+        receiverUserId: receiverAccount.user_id,
+        senderAccount,
+        receiverAccount,
+        amount: transferAmount,
+        currency: senderAccount.currency || 'INR',
+        description,
+      });
+    } catch (notifErr) {
+      console.warn('[TransferService] Post-commit notification error:', notifErr.message);
+    }
+
+    // 13. Post-commit fraud surveillance and manual inspection queue
+    try {
+      await evaluateAndRecordTransferRisk({
+        senderAccountId: resolvedSenderId,
+        receiverAccountId,
+        userId,
+        amount: transferAmount,
+        transaction: transactionInsert.rows[0],
+        requestId,
+      });
+    } catch (fraudErr) {
+      console.warn('[TransferService] Post-commit fraud evaluation error:', fraudErr.message);
+    }
+
+    // 14. Trigger immediate Outbox Relay flush to Kafka (fail-safe)
+    processPendingOutboxEvents({ limit: 20 }).catch((outboxErr) => {
+      console.warn('[TransferService] Post-commit outbox flush warning:', outboxErr.message);
+    });
 
 
 

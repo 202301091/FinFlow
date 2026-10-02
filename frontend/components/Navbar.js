@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import { removeToken, getUser } from '@/lib/api';
 import FinFlowLogo from '@/components/FinFlowLogo';
 import ThemeToggle from '@/components/ThemeToggle';
+import NotificationBell from '@/components/NotificationBell';
 import { useEffect, useState } from 'react';
 
 export default function Navbar({ onOpenTransfer }) {
@@ -75,6 +76,8 @@ export default function Navbar({ onOpenTransfer }) {
               <span>Send Money</span>
             </motion.button>
           )}
+
+          <NotificationBell />
 
           <ThemeToggle />
 

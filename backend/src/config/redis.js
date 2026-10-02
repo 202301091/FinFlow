@@ -33,8 +33,11 @@ redisClient.on('error', (error) => {
   console.error('[Redis Client Error]:', error.message || error);
 });
 
-redisClient.on('end', () => {
-  console.log('[Redis] Connection closed');
+// Dedicated duplicate client for Redis Pub/Sub subscriptions
+const redisSubscriber = redisClient.duplicate();
+
+redisSubscriber.on('error', (error) => {
+  console.error('[Redis Subscriber Error]:', error.message || error);
 });
 
 /**
@@ -42,12 +45,12 @@ redisClient.on('end', () => {
  * Allows application to continue running even if Redis is unavailable (fail-open)
  */
 const connectRedis = async () => {
-  if (redisClient.isOpen && redisClient.isReady) {
-    return redisClient;
-  }
   try {
     if (!redisClient.isOpen) {
       await redisClient.connect();
+    }
+    if (!redisSubscriber.isOpen) {
+      await redisSubscriber.connect();
     }
     return redisClient;
   } catch (error) {
@@ -58,10 +61,13 @@ const connectRedis = async () => {
 };
 
 /**
- * Gracefully disconnect Redis client
+ * Gracefully disconnect Redis client and subscriber
  */
 const disconnectRedis = async () => {
   try {
+    if (redisSubscriber.isOpen) {
+      await redisSubscriber.quit();
+    }
     if (redisClient.isOpen) {
       await redisClient.quit();
     }
@@ -75,5 +81,5 @@ const disconnectRedis = async () => {
  */
 const isRedisAvailable = () => Boolean(redisClient.isOpen && redisClient.isReady);
 
-export { redisClient, connectRedis, disconnectRedis, isRedisAvailable };
+export { redisClient, redisSubscriber, connectRedis, disconnectRedis, isRedisAvailable };
 export default redisClient;

@@ -102,7 +102,33 @@ export const api = {
   get: (endpoint, options = {}) => request(endpoint, { ...options, method: 'GET' }),
   post: (endpoint, body, options = {}) => request(endpoint, { ...options, method: 'POST', body }),
   put: (endpoint, body, options = {}) => request(endpoint, { ...options, method: 'PUT', body }),
+  patch: (endpoint, body, options = {}) => request(endpoint, { ...options, method: 'PATCH', body }),
   delete: (endpoint, options = {}) => request(endpoint, { ...options, method: 'DELETE' }),
+};
+
+/**
+ * Notification API helpers
+ */
+export const getNotificationStreamUrl = () => {
+  const token = getToken();
+  return `${API_BASE_URL}/notifications/stream?token=${encodeURIComponent(token || '')}`;
+};
+
+export const getNotifications = async ({ page = 1, limit = 20, unreadOnly = false } = {}) => {
+  const query = new URLSearchParams({
+    page: String(page),
+    limit: String(limit),
+    unreadOnly: String(unreadOnly),
+  }).toString();
+  return api.get(`/notifications?${query}`);
+};
+
+export const markNotificationRead = async (notificationId) => {
+  return api.patch(`/notifications/${notificationId}/read`);
+};
+
+export const markAllNotificationsRead = async () => {
+  return api.patch('/notifications/read-all');
 };
 
 export default api;
