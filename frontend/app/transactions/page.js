@@ -101,19 +101,19 @@ export default function TransactionsPage() {
       </AnimatePresence>
 
       {/* Main Page Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 w-full overflow-x-hidden">
         {/* Banner with Transfer CTA & Framer Motion entry */}
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, ease: 'easeOut' }}
-          className="relative rounded-3xl p-6 sm:p-8 bg-gradient-to-br from-slate-900 via-[#0B1E30] to-[#0A1622] text-white border border-slate-800 shadow-2xl shadow-slate-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-6 overflow-hidden"
+          className="relative rounded-3xl p-5 sm:p-8 bg-gradient-to-br from-slate-900 via-[#0B1E30] to-[#0A1622] text-white border border-slate-800 shadow-2xl shadow-slate-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-5 sm:gap-6 overflow-hidden"
         >
           {/* Subtle Ambient Glows */}
           <div className="absolute -top-24 -right-24 w-80 h-80 bg-sky-500/15 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
-          <div className="z-10">
+          <div className="z-10 w-full sm:w-auto">
             <span className="text-sky-300 text-xs font-bold uppercase tracking-wider flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-sky-400"></span>
               Ledger Overview
@@ -126,12 +126,12 @@ export default function TransactionsPage() {
             </p>
           </div>
 
-          <div className="z-10 shrink-0">
+          <div className="z-10 w-full sm:w-auto shrink-0">
             <motion.button
               whileHover={{ scale: 1.04, y: -2 }}
               whileTap={{ scale: 0.97 }}
               onClick={() => setIsTransferOpen(true)}
-              className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold px-6 py-3.5 rounded-xl shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all cursor-pointer text-sm"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold px-6 py-3.5 rounded-xl shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all cursor-pointer text-sm"
             >
               <span className="text-base">💸</span>
               <span>Send Money</span>
