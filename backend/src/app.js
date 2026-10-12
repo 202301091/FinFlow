@@ -27,8 +27,18 @@ app.use(requestIdMiddleware);
 app.use(httpLogger);
 app.use(metricsMiddleware);
 
+const rawCors = process.env.CORS_ORIGIN || 'http://localhost:3000';
+const allowedOrigins = rawCors.split(',').map((o) => o.trim()).filter(Boolean);
+
 app.use(cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    origin: (origin, callback) => {
+        // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
+        if (!origin) return callback(null, true);
+        if (allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
+            return callback(null, true);
+        }
+        return callback(new Error(`CORS policy blocked access from origin: ${origin}`));
+    },
     credentials: true,
 }));
 
