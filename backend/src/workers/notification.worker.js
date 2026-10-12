@@ -11,6 +11,7 @@ import {
 } from '../events/transaction.event.js';
 import { markEventProcessed } from '../services/consumerIdempotency.service.js';
 import { executeWithRetry, recordDeadLetter } from '../services/consumerRetry.service.js';
+import logger from '../config/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
@@ -78,7 +79,7 @@ export const formatNotification = (event) => {
  */
 export const dispatchNotification = async (notification) => {
   // Structured logging for audit trails and monitoring
-  console.log(
+  logger.info(
     `[Notification Worker] [${notification.type}] Account: ${notification.recipientAccountId} | ${notification.message}`
   );
 
@@ -99,7 +100,7 @@ export const dispatchNotification = async (notification) => {
  */
 export const processNotificationEvent = async (event) => {
   if (!isValidTransactionCompletedEvent(event)) {
-    console.warn('[Notification Worker] Ignored malformed or unrecognized event payload:', event?.eventType || 'UNKNOWN');
+    logger.warn({ eventType: event?.eventType }, `[Notification Worker] Ignored malformed or unrecognized event payload: ${event?.eventType || 'UNKNOWN'}`);
     return { processed: false, reason: 'INVALID_EVENT_SCHEMA' };
   }
 
@@ -111,7 +112,7 @@ export const processNotificationEvent = async (event) => {
   );
 
   if (!isFirstTime) {
-    console.log(`[Notification Worker] [DUPLICATE] Event ${event.eventId} already processed. Skipping.`);
+    logger.info(`[Notification Worker] [DUPLICATE] Event ${event.eventId} already processed. Skipping.`);
     return { processed: false, duplicate: true, eventId: event.eventId };
   }
 
@@ -143,14 +144,14 @@ export const handleNotificationMessage = async ({ topic, partition, message }) =
   try {
     const rawValue = message.value ? message.value.toString('utf8') : null;
     if (!rawValue) {
-      console.warn(`[Notification Worker] Received empty message on topic ${topic} (partition ${partition})`);
+      logger.warn({ topic, partition }, `[Notification Worker] Received empty message on topic ${topic} (partition ${partition})`);
       return;
     }
 
     try {
       parsedEvent = JSON.parse(rawValue);
     } catch (parseErr) {
-      console.error(`[Notification Worker] Poison pill JSON on topic ${topic}:`, parseErr.message);
+      logger.error({ err: parseErr, topic }, `[Notification Worker] Poison pill JSON on topic ${topic}: ${parseErr.message}`);
       await recordDeadLetter({
         consumerGroup: KAFKA_CONSUMER_GROUPS.NOTIFICATIONS,
         topic,
@@ -169,10 +170,10 @@ export const handleNotificationMessage = async ({ topic, partition, message }) =
         { maxRetries: 3, baseDelayMs: 100 }
       );
     } else {
-      console.log(`[Notification Worker] Skipping unhandled eventType: ${parsedEvent.eventType}`);
+      logger.info(`[Notification Worker] Skipping unhandled eventType: ${parsedEvent.eventType}`);
     }
   } catch (error) {
-    console.error(`[Notification Worker] Retries exhausted for message on topic ${topic}:`, error.message);
+    logger.error({ err: error, topic }, `[Notification Worker] Retries exhausted for message on topic ${topic}: ${error.message}`);
     await recordDeadLetter({
       consumerGroup: KAFKA_CONSUMER_GROUPS.NOTIFICATIONS,
       topic,
@@ -195,12 +196,12 @@ export const startNotificationWorker = async ({
   groupId = KAFKA_CONSUMER_GROUPS.NOTIFICATIONS,
   topic = KAFKA_TOPICS.TRANSACTIONS,
 } = {}) => {
-  console.log(`[Notification Worker] Initializing consumer (group: '${groupId}', topic: '${topic}')...`);
+  logger.info(`[Notification Worker] Initializing consumer (group: '${groupId}', topic: '${topic}')...`);
 
   consumerInstance = createConsumer({ groupId });
 
   await consumerInstance.connect();
-  console.log(`[Notification Worker] Connected to Kafka broker successfully`);
+  logger.info('[Notification Worker] Connected to Kafka broker successfully');
 
   await consumerInstance.subscribe({
     topic,
@@ -212,7 +213,7 @@ export const startNotificationWorker = async ({
     eachMessage: handleNotificationMessage,
   });
 
-  console.log(`[Notification Worker] Active and listening for transaction events on '${topic}'`);
+  logger.info(`[Notification Worker] Active and listening for transaction events on '${topic}'`);
   return consumerInstance;
 };
 
@@ -225,12 +226,12 @@ export const stopNotificationWorker = async () => {
   if (isShuttingDown || !consumerInstance) return;
   isShuttingDown = true;
 
-  console.log('[Notification Worker] Shutting down notification consumer...');
+  logger.info('[Notification Worker] Shutting down notification consumer...');
   try {
     await consumerInstance.disconnect();
-    console.log('[Notification Worker] Disconnected cleanly');
+    logger.info('[Notification Worker] Disconnected cleanly');
   } catch (error) {
-    console.warn('[Notification Worker] Error during disconnect:', error.message);
+    logger.warn({ err: error }, `[Notification Worker] Error during disconnect: ${error.message}`);
   } finally {
     consumerInstance = null;
     isShuttingDown = false;
@@ -240,7 +241,7 @@ export const stopNotificationWorker = async () => {
 // Standalone execution entrypoint
 if (process.argv[1] === __filename) {
   const handleExitSignal = async (signal) => {
-    console.log(`\n[Notification Worker] Received ${signal}. Initiating graceful shutdown...`);
+    logger.info(`[Notification Worker] Received ${signal}. Initiating graceful shutdown...`);
     await stopNotificationWorker();
     process.exit(0);
   };
@@ -249,7 +250,7 @@ if (process.argv[1] === __filename) {
   process.on('SIGTERM', () => handleExitSignal('SIGTERM'));
 
   startNotificationWorker().catch((err) => {
-    console.error('[Notification Worker] Fatal startup failure:', err.message);
+    logger.error({ err }, `[Notification Worker] Fatal startup failure: ${err.message}`);
     process.exit(1);
   });
 }

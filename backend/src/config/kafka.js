@@ -1,4 +1,5 @@
 import { Kafka, logLevel } from 'kafkajs';
+import logger from './logger.js';
 
 const rawBrokers = process.env.KAFKA_BROKERS || 'localhost:9092';
 const brokers = rawBrokers.split(',').map((b) => b.trim()).filter(Boolean);
@@ -54,12 +55,12 @@ const RECONNECT_COOLDOWN_MS = 10000; // 10s cooldown to prevent blocking request
 
 kafkaProducer.on('producer.connect', () => {
   isProducerConnected = true;
-  console.log('[Kafka] Producer connected to broker successfully');
+  logger.info('[Kafka] Producer connected to broker successfully');
 });
 
 kafkaProducer.on('producer.disconnect', () => {
   isProducerConnected = false;
-  console.warn('[Kafka] Producer disconnected from broker');
+  logger.warn('[Kafka] Producer disconnected from broker');
 });
 
 /**
@@ -103,7 +104,7 @@ export const disconnectProducer = async () => {
     await kafkaProducer.disconnect();
     isProducerConnected = false;
   } catch (error) {
-    console.warn('[Kafka] Error disconnecting producer:', error.message);
+    logger.warn({ err: error }, `[Kafka] Error disconnecting producer: ${error.message}`);
   }
 };
 
@@ -174,11 +175,11 @@ export const ensureTopicExists = async ({
           },
         ],
       });
-      console.log(`[Kafka Admin] Created topic '${topic}' with ${numPartitions} partitions`);
+      logger.info(`[Kafka Admin] Created topic '${topic}' with ${numPartitions} partitions`);
     }
     return true;
   } catch (error) {
-    console.warn(`[Kafka Admin] Topic check/creation for '${topic}' bypassed:`, error.message);
+    logger.warn({ err: error }, `[Kafka Admin] Topic check/creation for '${topic}' bypassed: ${error.message}`);
     return false;
   } finally {
     try {

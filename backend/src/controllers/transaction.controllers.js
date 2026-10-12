@@ -166,13 +166,14 @@ export const getAllTransactions = async (req, res, next) => {
       throw new ApiError(401, 'User authentication required');
     }
 
-    const { page = 1, limit = 10, accountId } = req.query;
+    const { page, limit = 10, accountId, cursor } = req.query;
 
     const result = await getTransactionHistory({
       userId,
-      page,
+      page: page ? parseInt(page, 10) : (cursor ? null : 1),
       limit,
       accountId,
+      cursor,
     });
 
     return res

@@ -11,6 +11,8 @@ import {
 } from '../events/transaction.event.js';
 import { markEventProcessed } from '../services/consumerIdempotency.service.js';
 import { executeWithRetry, recordDeadLetter } from '../services/consumerRetry.service.js';
+import logger from '../config/logger.js';
+import { fraudAlertsTotal } from '../config/metrics.js';
 
 const __filename = fileURLToPath(import.meta.url);
 
@@ -144,9 +146,13 @@ export const dispatchFraudAlert = async (evaluation) => {
     createdAt: new Date().toISOString(),
   };
 
-  console.warn(
+  logger.warn(
     `[Fraud Worker] [ALERT - ${alertRecord.severity}] Tx: ${alertRecord.transactionId} | Score: ${alertRecord.riskScore}/100 | Rules: [${evaluation.triggeredRules.map((r) => r.rule).join(', ')}]`
   );
+
+  try {
+    fraudAlertsTotal.inc({ severity: alertRecord.severity || 'LOW' });
+  } catch {}
 
   return alertRecord;
 };
@@ -173,7 +179,7 @@ export const processFraudEvent = async (event) => {
   );
 
   if (!isFirstTime) {
-    console.log(`[Fraud Worker] [DUPLICATE] Event ${event.eventId} already evaluated. Skipping.`);
+    logger.info(`[Fraud Worker] [DUPLICATE] Event ${event.eventId} already evaluated. Skipping.`);
     return { flagged: false, duplicate: true, eventId: event.eventId };
   }
 
@@ -211,7 +217,7 @@ export const handleFraudMessage = async ({ topic, partition, message }) => {
     try {
       parsedEvent = JSON.parse(rawValue);
     } catch (parseErr) {
-      console.error(`[Fraud Worker] Poison pill JSON on ${topic}:`, parseErr.message);
+      logger.error({ err: parseErr, topic }, `[Fraud Worker] Poison pill JSON on ${topic}: ${parseErr.message}`);
       await recordDeadLetter({
         consumerGroup: KAFKA_CONSUMER_GROUPS.FRAUD,
         topic,
@@ -231,7 +237,7 @@ export const handleFraudMessage = async ({ topic, partition, message }) => {
       );
     }
   } catch (error) {
-    console.error(`[Fraud Worker] Retries exhausted for message on ${topic}:`, error.message);
+    logger.error({ err: error, topic }, `[Fraud Worker] Retries exhausted for message on ${topic}: ${error.message}`);
     await recordDeadLetter({
       consumerGroup: KAFKA_CONSUMER_GROUPS.FRAUD,
       topic,
@@ -257,12 +263,12 @@ export const startFraudWorker = async ({
   groupId = KAFKA_CONSUMER_GROUPS.FRAUD,
   topic = KAFKA_TOPICS.TRANSACTIONS,
 } = {}) => {
-  console.log(`[Fraud Worker] Initializing consumer (group: '${groupId}', topic: '${topic}')...`);
+  logger.info(`[Fraud Worker] Initializing consumer (group: '${groupId}', topic: '${topic}')...`);
 
   consumerInstance = createConsumer({ groupId });
 
   await consumerInstance.connect();
-  console.log(`[Fraud Worker] Connected to Kafka broker successfully`);
+  logger.info('[Fraud Worker] Connected to Kafka broker successfully');
 
   await consumerInstance.subscribe({
     topic,
@@ -274,7 +280,7 @@ export const startFraudWorker = async ({
     eachMessage: handleFraudMessage,
   });
 
-  console.log(`[Fraud Worker] Active and monitoring transactions on '${topic}'`);
+  logger.info(`[Fraud Worker] Active and monitoring transactions on '${topic}'`);
   return consumerInstance;
 };
 
@@ -287,12 +293,12 @@ export const stopFraudWorker = async () => {
   if (isShuttingDown || !consumerInstance) return;
   isShuttingDown = true;
 
-  console.log('[Fraud Worker] Shutting down fraud consumer...');
+  logger.info('[Fraud Worker] Shutting down fraud consumer...');
   try {
     await consumerInstance.disconnect();
-    console.log('[Fraud Worker] Disconnected cleanly');
+    logger.info('[Fraud Worker] Disconnected cleanly');
   } catch (error) {
-    console.warn('[Fraud Worker] Error during disconnect:', error.message);
+    logger.warn({ err: error }, `[Fraud Worker] Error during disconnect: ${error.message}`);
   } finally {
     consumerInstance = null;
     isShuttingDown = false;
@@ -302,7 +308,7 @@ export const stopFraudWorker = async () => {
 // Standalone execution entrypoint
 if (process.argv[1] === __filename) {
   const handleExitSignal = async (signal) => {
-    console.log(`\n[Fraud Worker] Received ${signal}. Initiating graceful shutdown...`);
+    logger.info(`[Fraud Worker] Received ${signal}. Initiating graceful shutdown...`);
     await stopFraudWorker();
     process.exit(0);
   };
@@ -311,7 +317,7 @@ if (process.argv[1] === __filename) {
   process.on('SIGTERM', () => handleExitSignal('SIGTERM'));
 
   startFraudWorker().catch((err) => {
-    console.error('[Fraud Worker] Fatal startup failure:', err.message);
+    logger.error({ err }, `[Fraud Worker] Fatal startup failure: ${err.message}`);
     process.exit(1);
   });
 }

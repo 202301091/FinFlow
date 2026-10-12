@@ -57,8 +57,6 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
     UNIQUE (user_id, key)
 );
 
-CREATE INDEX IF NOT EXISTS idx_idempotency_lookup ON idempotency_keys(user_id, key);
-
 -- Dedicated Audit Logs table for security and compliance tracking
 CREATE TABLE IF NOT EXISTS audit_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

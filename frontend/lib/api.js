@@ -131,4 +131,24 @@ export const markAllNotificationsRead = async () => {
   return api.patch('/notifications/read-all');
 };
 
+/**
+ * Transaction API helpers (supports scalable keyset cursor pagination)
+ */
+export const getTransactions = async ({ cursor = null, page = null, limit = 10, accountId = null } = {}) => {
+  const params = new URLSearchParams();
+  if (cursor) {
+    params.set('cursor', cursor);
+  } else if (page !== null && page !== undefined) {
+    params.set('page', String(page));
+  } else {
+    // Default to keyset cursor pagination starting from most recent
+    params.set('cursor', 'START');
+  }
+
+  if (limit) params.set('limit', String(limit));
+  if (accountId) params.set('accountId', accountId);
+
+  return api.get(`/transactions?${params.toString()}`);
+};
+
 export default api;

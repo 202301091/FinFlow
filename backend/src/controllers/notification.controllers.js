@@ -1,6 +1,7 @@
 import { redisSubscriber, isRedisAvailable } from '../config/redis.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { ApiError } from '../utils/ApiError.js';
+import logger from '../config/logger.js';
 import {
   getUserNotifications,
   markNotificationAsRead,
@@ -41,7 +42,7 @@ export const streamNotifications = async (req, res, next) => {
       try {
         res.write(`data: ${message}\n\n`);
       } catch (err) {
-        console.error('[SSE] Failed to write event to response stream:', err.message);
+        logger.error({ err }, `[SSE] Failed to write event to response stream: ${err.message}`);
       }
     };
 
@@ -49,7 +50,7 @@ export const streamNotifications = async (req, res, next) => {
     if (redisSubscriber && redisSubscriber.isOpen) {
       await redisSubscriber.subscribe(channel, messageListener);
     } else {
-      console.warn('[SSE] Redis subscriber not ready. Live streaming suspended.');
+      logger.warn('[SSE] Redis subscriber not ready. Live streaming suspended.');
     }
 
     // 5. Keep-alive heartbeat comment every 25 seconds to prevent network timeouts
@@ -65,7 +66,7 @@ export const streamNotifications = async (req, res, next) => {
           await redisSubscriber.unsubscribe(channel, messageListener);
         }
       } catch (unsubscribeErr) {
-        console.warn('[SSE] Unsubscribe error on disconnect:', unsubscribeErr.message);
+        logger.warn({ err: unsubscribeErr }, `[SSE] Unsubscribe error on disconnect: ${unsubscribeErr.message}`);
       }
       res.end();
     });

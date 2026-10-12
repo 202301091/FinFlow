@@ -3,6 +3,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { createAuditLog } from '../services/audit.service.js';
 import { getCache, setCache, deleteCache } from '../utils/redis.util.js';
+import logger from '../config/logger.js';
 
 const createAccount = async (req, res) => {
     const { account_type, balance } = req.body;
@@ -74,7 +75,7 @@ const createAccount = async (req, res) => {
 
         return res.status(201).json(new ApiResponse(201, createdAccount, "Account created successfully"));
     } catch (error) {
-        console.error('Error creating account:', error);
+        logger.error({ err: error }, `Error creating account: ${error.message || error}`);
         return res.status(500).json(new ApiError(500, error?.message || "Internal server error"));
     }
 };
@@ -121,7 +122,7 @@ const getAccounts = async (req, res) => {
         // Always return 200 with the array (empty [] if no accounts exist yet)
         return res.status(200).json(new ApiResponse(200, accounts.rows, "Accounts fetched successfully"));
     } catch (error) {
-        console.error('Error fetching accounts:', error);
+        logger.error({ err: error }, `Error fetching accounts: ${error.message || error}`);
         return res.status(500).json(new ApiError(500, error?.message || "Internal server error"));
     }
 };

@@ -1,4 +1,5 @@
 import { pool } from '../config/db.js';
+import logger from '../config/logger.js';
 
 /**
  * Mark a domain event as processed by a specific consumer group atomically.
@@ -30,7 +31,7 @@ export const markEventProcessed = async (consumerGroup, eventId, eventType, clie
     const result = await client.query(query, [consumerGroup, eventId, eventType || 'UNKNOWN']);
     return result.rowCount > 0;
   } catch (error) {
-    console.error(`[ConsumerIdempotency] Database error checking idempotency for event ${eventId}:`, error.message);
+    logger.error({ err: error, eventId }, `[ConsumerIdempotency] Database error checking idempotency for event ${eventId}: ${error.message}`);
     throw error;
   }
 };

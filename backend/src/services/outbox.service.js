@@ -1,5 +1,6 @@
 import { pool } from '../config/db.js';
 import { kafkaProducer, connectProducer, isKafkaAvailable, KAFKA_TOPICS } from '../config/kafka.js';
+import logger from '../config/logger.js';
 
 /**
  * Persist an event into the transaction_outbox table.
@@ -82,7 +83,7 @@ export const publishEventToKafka = async ({
 
     return true;
   } catch (error) {
-    console.warn(`[Outbox] Kafka publication error on topic '${topic}':`, error.message);
+    logger.warn({ err: error, topic }, `[Outbox] Kafka publication error on topic '${topic}': ${error.message}`);
     return false;
   }
 };
@@ -161,7 +162,7 @@ export const processPendingOutboxEvents = async ({ limit = 50 } = {}) => {
     try {
       await client.query('ROLLBACK');
     } catch {}
-    console.warn('[Outbox] Error processing pending outbox batch:', error.message);
+    logger.warn({ err: error }, `[Outbox] Error processing pending outbox batch: ${error.message}`);
     return publishedCount;
   } finally {
     client.release();
@@ -183,7 +184,7 @@ export const startOutboxRelay = ({ intervalMs = 3000 } = {}) => {
     try {
       await processPendingOutboxEvents({ limit: 50 });
     } catch (err) {
-      console.warn('[Outbox Relay] Background tick error:', err.message);
+      logger.warn({ err }, `[Outbox Relay] Background tick error: ${err.message}`);
     }
   }, intervalMs);
 

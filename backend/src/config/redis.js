@@ -1,4 +1,5 @@
 import { createClient } from 'redis';
+import logger from './logger.js';
 
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 
@@ -7,7 +8,7 @@ const redisClient = createClient({
   socket: {
     reconnectStrategy: (retries) => {
       if (retries > 10) {
-        console.error('[Redis] Max reconnection attempts (10) reached. Temporarily suspending retries.');
+        logger.error('[Redis] Max reconnection attempts (10) reached. Temporarily suspending retries.');
         return new Error('Redis reconnection attempts exhausted');
       }
       const delay = Math.min(retries * 100, 3000);
@@ -18,26 +19,26 @@ const redisClient = createClient({
 
 // Redis Connection Lifecycle Events
 redisClient.on('connect', () => {
-  console.log('[Redis] Socket connected');
+  logger.info('[Redis] Socket connected');
 });
 
 redisClient.on('ready', () => {
-  console.log('[Redis] Client ready to receive commands');
+  logger.info('[Redis] Client ready to receive commands');
 });
 
 redisClient.on('reconnecting', () => {
-  console.warn('[Redis] Reconnecting to Redis server...');
+  logger.warn('[Redis] Reconnecting to Redis server...');
 });
 
 redisClient.on('error', (error) => {
-  console.error('[Redis Client Error]:', error.message || error);
+  logger.error({ err: error }, `[Redis Client Error]: ${error.message || error}`);
 });
 
 // Dedicated duplicate client for Redis Pub/Sub subscriptions
 const redisSubscriber = redisClient.duplicate();
 
 redisSubscriber.on('error', (error) => {
-  console.error('[Redis Subscriber Error]:', error.message || error);
+  logger.error({ err: error }, `[Redis Subscriber Error]: ${error.message || error}`);
 });
 
 /**
@@ -54,7 +55,7 @@ const connectRedis = async () => {
     }
     return redisClient;
   } catch (error) {
-    console.error('[Redis] Initial connection failed:', error.message);
+    logger.error({ err: error }, `[Redis] Initial connection failed: ${error.message}`);
     // Graceful degradation: do not crash the app, return null
     return null;
   }
@@ -66,13 +67,16 @@ const connectRedis = async () => {
 const disconnectRedis = async () => {
   try {
     if (redisSubscriber.isOpen) {
-      await redisSubscriber.quit();
+      try {
+        await redisSubscriber.unsubscribe();
+      } catch {}
+      await redisSubscriber.disconnect();
     }
     if (redisClient.isOpen) {
-      await redisClient.quit();
+      await redisClient.disconnect();
     }
   } catch (error) {
-    console.error('[Redis] Disconnect error:', error.message);
+    logger.error({ err: error }, `[Redis] Disconnect error: ${error.message}`);
   }
 };
 

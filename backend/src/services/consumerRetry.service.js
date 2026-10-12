@@ -1,4 +1,5 @@
 import { pool } from '../config/db.js';
+import logger from '../config/logger.js';
 
 /**
  * Execute an asynchronous operation with exponential backoff retries.
@@ -51,7 +52,8 @@ export const recordDeadLetter = async (
   const errorMessage = error?.message || String(error);
   const stackTrace = error?.stack || null;
 
-  console.error(
+  logger.error(
+    { err: error, eventId, consumerGroup, topic, retryCount },
     `[Consumer DLQ] Offloading failed event ${eventId} (group: ${consumerGroup}, topic: ${topic}): ${errorMessage}`
   );
 
@@ -74,7 +76,7 @@ export const recordDeadLetter = async (
     ]);
     return result.rows[0];
   } catch (dbErr) {
-    console.error('[Consumer DLQ] Fatal DB error writing to consumer_dlq:', dbErr.message);
+    logger.error({ err: dbErr }, `[Consumer DLQ] Fatal DB error writing to consumer_dlq: ${dbErr.message}`);
     return null;
   }
 };

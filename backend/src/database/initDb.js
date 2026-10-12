@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { pool } from '../config/db.js';
+import logger from '../config/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,12 +12,13 @@ export const initDb = async () => {
     const schemaPath = path.join(__dirname, 'schema.sql');
     const schemaSql = fs.readFileSync(schemaPath, 'utf8');
 
-    console.log('Applying database schema to PostgreSQL...');
+    logger.info('Applying database schema to PostgreSQL...');
     await pool.query(schemaSql);
 
     // Ensure transactions table does not have duplicate idempotency_key column
     await pool.query(`
       ALTER TABLE transactions DROP COLUMN IF EXISTS idempotency_key;
+      DROP INDEX IF EXISTS idx_idempotency_lookup;
       DO $$
       BEGIN
         IF NOT EXISTS (
@@ -27,9 +29,9 @@ export const initDb = async () => {
       END $$;
     `);
 
-    console.log('✓ Database tables, constraints, and schema updated successfully!');
+    logger.info('✓ Database tables, constraints, and schema updated successfully!');
   } catch (error) {
-    console.error('Error initializing database:', error.message);
+    logger.error({ err: error }, `Error initializing database: ${error.message}`);
     throw error;
   }
 };

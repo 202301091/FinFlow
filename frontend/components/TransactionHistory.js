@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { api } from '@/lib/api';
+import { api, getTransactions } from '@/lib/api';
 
 const listVariants = {
   hidden: { opacity: 0 },
@@ -26,51 +26,83 @@ const itemVariants = {
 
 export default function TransactionHistory({ refreshTrigger }) {
   const [transactions, setTransactions] = useState([]);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 10,
-    total: 0,
-    totalPages: 1,
-    hasNextPage: false,
-    hasPrevPage: false,
-  });
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [selectedTx, setSelectedTx] = useState(null);
 
-  const fetchTransactions = async (page = 1, limit = 10) => {
-    setLoading(true);
+  // Scalable Keyset Cursor Pagination State
+  const [cursor, setCursor] = useState('START');
+  const [nextCursor, setNextCursor] = useState(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [cursorStack, setCursorStack] = useState(['START']);
+  const limit = 10;
+
+  const fetchTransactions = async (targetCursor = 'START', isAppend = false) => {
+    if (isAppend) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
     setError(null);
+
     try {
-      const response = await api.get(`/transactions?page=${page}&limit=${limit}`);
+      const response = await getTransactions({
+        cursor: targetCursor,
+        limit,
+      });
+
       if (response?.data) {
-        setTransactions(response.data.transactions || []);
-        setPagination(
-          response.data.pagination || {
-            page: 1,
-            limit: 10,
-            total: 0,
-            totalPages: 1,
-            hasNextPage: false,
-            hasPrevPage: false,
-          }
-        );
+        const fetchedTxs = response.data.transactions || [];
+        const pag = response.data.pagination || {};
+
+        if (isAppend) {
+          setTransactions((prev) => [...prev, ...fetchedTxs]);
+        } else {
+          setTransactions(fetchedTxs);
+        }
+
+        setCursor(targetCursor);
+        setNextCursor(pag.nextCursor || null);
+        setHasMore(Boolean(pag.hasMore));
       }
     } catch (err) {
       setError(err.message || 'Failed to load transaction history.');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
+  // Initial load and auto-refresh when new transfers complete
   useEffect(() => {
-    fetchTransactions(pagination.page, pagination.limit);
-  }, [pagination.page, pagination.limit, refreshTrigger]);
+    setCursorStack(['START']);
+    fetchTransactions('START', false);
+  }, [refreshTrigger]);
 
-  const handlePageChange = (newPage) => {
-    if (newPage >= 1 && newPage <= pagination.totalPages && newPage !== pagination.page) {
-      fetchTransactions(newPage, pagination.limit);
-    }
+  const handleNextPage = () => {
+    if (!hasMore || !nextCursor || loading || loadingMore) return;
+    setCursorStack((prev) => [...prev, nextCursor]);
+    fetchTransactions(nextCursor, false);
+  };
+
+  const handlePrevPage = () => {
+    if (cursorStack.length <= 1 || loading || loadingMore) return;
+    const newStack = [...cursorStack];
+    newStack.pop();
+    const prevCursor = newStack[newStack.length - 1];
+    setCursorStack(newStack);
+    fetchTransactions(prevCursor, false);
+  };
+
+  const handleLoadMore = () => {
+    if (!hasMore || !nextCursor || loading || loadingMore) return;
+    fetchTransactions(nextCursor, true);
+  };
+
+  const handleRefresh = () => {
+    setCursorStack(['START']);
+    fetchTransactions('START', false);
   };
 
   const handleViewDetails = async (txId) => {
@@ -104,21 +136,26 @@ export default function TransactionHistory({ refreshTrigger }) {
         className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"
       >
         <div>
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <h3 className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
               Transaction History
             </h3>
-            <motion.span
-              initial={{ scale: 0.8, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              key={pagination.total}
-              className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
-            >
-              {pagination.total} {pagination.total === 1 ? 'record' : 'records'}
-            </motion.span>
+            <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800 flex items-center gap-1">
+              <span>⚡</span> Keyset Cursor
+            </span>
+            {transactions.length > 0 && (
+              <motion.span
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                key={transactions.length}
+                className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
+              >
+                {transactions.length} loaded
+              </motion.span>
+            )}
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Audit ledger of your inbound and outbound transfers
+            Audit ledger of your inbound and outbound transfers with O(1) keyset cursor indexing
           </p>
         </div>
 
@@ -126,8 +163,8 @@ export default function TransactionHistory({ refreshTrigger }) {
           <motion.button
             whileHover={{ scale: 1.04 }}
             whileTap={{ scale: 0.96 }}
-            onClick={() => fetchTransactions(pagination.page, pagination.limit)}
-            disabled={loading}
+            onClick={handleRefresh}
+            disabled={loading || loadingMore}
             title="Refresh transaction history"
             className="p-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shadow-sm"
           >
@@ -169,7 +206,7 @@ export default function TransactionHistory({ refreshTrigger }) {
             <motion.button
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.96 }}
-              onClick={() => fetchTransactions(1, pagination.limit)}
+              onClick={handleRefresh}
               className="px-4 py-2 bg-sky-500 text-white rounded-xl text-xs font-semibold hover:bg-sky-400 cursor-pointer shadow-md"
             >
               Retry
@@ -290,49 +327,68 @@ export default function TransactionHistory({ refreshTrigger }) {
           </motion.div>
         )}
 
-        {/* Pagination Footer with Framer Motion Buttons */}
-        {pagination.totalPages > 1 && (
-          <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
-            <div>
-              Showing Page <span className="font-bold text-slate-900 dark:text-white">{pagination.page}</span> of{' '}
-              <span className="font-bold text-slate-900 dark:text-white">{pagination.totalPages}</span> ({pagination.total} total)
+        {/* Keyset Cursor Pagination & Continuous Stream Controls */}
+        {transactions.length > 0 && (
+          <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600 dark:text-slate-400">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-slate-700 dark:text-slate-300">
+                Page {cursorStack.length}
+              </span>
+              <span className="text-slate-300 dark:text-slate-700">•</span>
+              <span>
+                {transactions.length} items rendered
+              </span>
+              {!hasMore && (
+                <>
+                  <span className="text-slate-300 dark:text-slate-700">•</span>
+                  <span className="text-[11px] text-slate-400 dark:text-slate-500 italic">
+                    End of ledger
+                  </span>
+                </>
+              )}
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
+              {/* Load More Button (Appends subsequent rows into continuous stream) */}
+              {hasMore && (
+                <motion.button
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={handleLoadMore}
+                  disabled={loading || loadingMore}
+                  className="px-3.5 py-1.5 rounded-xl bg-sky-50 dark:bg-sky-950/50 text-sky-600 dark:text-sky-400 border border-sky-200 dark:border-sky-800 font-bold hover:bg-sky-100 dark:hover:bg-sky-900/60 transition-colors disabled:opacity-50 cursor-pointer shadow-sm flex items-center gap-1.5"
+                >
+                  {loadingMore ? (
+                    <>
+                      <span className="animate-spin text-xs">⏳</span>
+                      <span>Loading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>↓</span>
+                      <span>Load More</span>
+                    </>
+                  )}
+                </motion.button>
+              )}
+
+              {/* Cursor Stepper: Previous Page (Pops cursor stack) */}
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => handlePageChange(pagination.page - 1)}
-                disabled={!pagination.hasPrevPage || loading}
+                onClick={handlePrevPage}
+                disabled={cursorStack.length <= 1 || loading || loadingMore}
                 className="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-sm"
               >
                 ← Prev
               </motion.button>
 
-              {/* Numeric Page Chips */}
-              <div className="hidden sm:flex items-center gap-1.5">
-                {Array.from({ length: pagination.totalPages }, (_, idx) => idx + 1).map((p) => (
-                  <motion.button
-                    key={p}
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => handlePageChange(p)}
-                    className={`w-8 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      p === pagination.page
-                        ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/25'
-                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
-                    }`}
-                  >
-                    {p}
-                  </motion.button>
-                ))}
-              </div>
-
+              {/* Cursor Stepper: Next Page (Applies nextCursor) */}
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
-                onClick={() => handlePageChange(pagination.page + 1)}
-                disabled={!pagination.hasNextPage || loading}
+                onClick={handleNextPage}
+                disabled={!hasMore || !nextCursor || loading || loadingMore}
                 className="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 font-semibold hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer shadow-sm"
               >
                 Next →

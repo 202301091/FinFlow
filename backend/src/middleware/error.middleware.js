@@ -1,4 +1,5 @@
 import { ApiError } from '../utils/ApiError.js';
+import logger from '../config/logger.js';
 
 /**
  * PostgreSQL Error Code Map:
@@ -30,6 +31,8 @@ const handlePostgreSQLError = (err) => {
  * Ensures consistent response format and shields clients from internal database details.
  */
 export const errorHandler = (err, req, res, next) => {
+  res.locals.errorMessage = err.message || 'An unexpected internal server error occurred';
+
   // 1. Direct ApiError instances
   if (err instanceof ApiError) {
     return res.status(err.statusCode).json(err);
@@ -62,7 +65,10 @@ export const errorHandler = (err, req, res, next) => {
 
   // 5. Unhandled / Unexpected Server Errors
   // Log privately on server for developer inspection
-  console.error(`[Server Error] [Request ID: ${req.id || 'N/A'}]:`, err.stack || err);
+  logger.error(
+    { err, requestId: req.id },
+    `[Server Error] [Request ID: ${req.id || 'N/A'}]: ${err.message || err}`
+  );
 
   // Return sanitized 500 error to client without exposing database queries or stack traces
   const internalError = new ApiError(

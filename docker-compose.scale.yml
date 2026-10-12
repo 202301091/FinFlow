@@ -1,0 +1,263 @@
+# FinFlow Multi-Node Distributed Architecture
+# Launch entire system: docker compose -f docker-compose.scale.yml up --build
+
+version: '3.8'
+
+services:
+  # ==========================================
+  # 1. LOAD BALANCER & REVERSE PROXY
+  # ==========================================
+  load-balancer:
+    image: nginx:alpine
+    container_name: finflow-load-balancer
+    ports:
+      - "5000:5000" # Public entry point for all frontend & API clients
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - api-1
+      - api-2
+    networks:
+      - finflow-network
+    restart: unless-stopped
+
+  # ==========================================
+  # 2. HORIZONTALLY SCALED BACKEND API INSTANCES
+  # ==========================================
+  api-1:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: finflow-api-1
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/finflow
+      - DB_POOL_MAX=5
+      - REDIS_URL=redis://redis:6379
+      - JWT_Access_SECRET=finflow_secret_key_access_2026
+      - JWT_Refresh_SECRET=finflow_secret_key_refresh_2026
+      - CORS_ORIGIN=http://localhost:3000
+      - KAFKA_BROKERS=kafka:9092
+      - KAFKA_CLIENT_ID=finflow-backend-node-1
+      - KAFKA_TOPIC_TRANSACTIONS=transaction-events
+      - KAFKA_GROUP_NOTIFICATIONS=finflow-notifications-group
+      - KAFKA_GROUP_FRAUD=finflow-fraud-group
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    networks:
+      - finflow-network
+    restart: unless-stopped
+
+  api-2:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: finflow-api-2
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/finflow
+      - DB_POOL_MAX=5
+      - REDIS_URL=redis://redis:6379
+      - JWT_Access_SECRET=finflow_secret_key_access_2026
+      - JWT_Refresh_SECRET=finflow_secret_key_refresh_2026
+      - CORS_ORIGIN=http://localhost:3000
+      - KAFKA_BROKERS=kafka:9092
+      - KAFKA_CLIENT_ID=finflow-backend-node-2
+      - KAFKA_TOPIC_TRANSACTIONS=transaction-events
+      - KAFKA_GROUP_NOTIFICATIONS=finflow-notifications-group
+      - KAFKA_GROUP_FRAUD=finflow-fraud-group
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    networks:
+      - finflow-network
+    restart: unless-stopped
+
+  # ==========================================
+  # 3. BACKGROUND CONSUMER WORKERS (EVENT-DRIVEN)
+  # ==========================================
+  worker-notification:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: finflow-worker-notification
+    command: ["npm", "run", "worker:notification"]
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/finflow
+      - REDIS_URL=redis://redis:6379
+      - KAFKA_BROKERS=kafka:9092
+      - KAFKA_CLIENT_ID=finflow-notification-worker
+      - KAFKA_TOPIC_TRANSACTIONS=transaction-events
+      - KAFKA_GROUP_NOTIFICATIONS=finflow-notifications-group
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    networks:
+      - finflow-network
+    restart: unless-stopped
+
+  worker-fraud:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: finflow-worker-fraud
+    command: ["npm", "run", "worker:fraud"]
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/finflow
+      - REDIS_URL=redis://redis:6379
+      - KAFKA_BROKERS=kafka:9092
+      - KAFKA_CLIENT_ID=finflow-fraud-worker
+      - KAFKA_TOPIC_TRANSACTIONS=transaction-events
+      - KAFKA_GROUP_FRAUD=finflow-fraud-group
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    networks:
+      - finflow-network
+    restart: unless-stopped
+
+  # ==========================================
+  # 4. SHARED DATA TIER (POSTGRESQL & REDIS)
+  # ==========================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: finflow-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: finflow
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./backend/src/database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d finflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - finflow-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: finflow-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - finflow-network
+    restart: unless-stopped
+
+  # ==========================================
+  # 5. ASYNC MESSAGING TIER (APACHE KAFKA)
+  # ==========================================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: finflow-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - finflow-network
+    restart: unless-stopped
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: finflow-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      - finflow-network
+    restart: unless-stopped
+
+  # ==========================================
+  # 6. OBSERVABILITY & METRICS (PROMETHEUS)
+  # ==========================================
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: finflow-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - finflow-network
+    restart: unless-stopped
+
+  # ==========================================
+  # 7. OBSERVABILITY & VISUALIZATION (GRAFANA)
+  # ==========================================
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: finflow-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    networks:
+      - finflow-network
+    restart: unless-stopped
+
+# ==========================================
+# PERSISTENT VOLUMES & PRIVATE NETWORKING
+# ==========================================
+volumes:
+  postgres-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+
+networks:
+  finflow-network:
+    driver: bridge
+

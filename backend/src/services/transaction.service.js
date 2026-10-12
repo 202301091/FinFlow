@@ -5,6 +5,8 @@ import { createTransferNotifications } from './notification.service.js';
 import { evaluateAndRecordTransferRisk } from './fraud.service.js';
 import { createTransactionCompletedEvent } from '../events/transaction.event.js';
 import { writeOutboxEvent, processPendingOutboxEvents } from './outbox.service.js';
+import logger from '../config/logger.js';
+import { transactionsTotal, transactionAmountTotal } from '../config/metrics.js';
 /**
  * Execute an atomic financial transfer between two accounts.
  *
@@ -211,7 +213,7 @@ export const transferFunds = async ({
         description,
       });
     } catch (notifErr) {
-      console.warn('[TransferService] Post-commit notification error:', notifErr.message);
+      logger.warn({ err: notifErr }, `[TransferService] Post-commit notification error: ${notifErr.message}`);
     }
 
     // 13. Post-commit fraud surveillance and manual inspection queue
@@ -225,15 +227,24 @@ export const transferFunds = async ({
         requestId,
       });
     } catch (fraudErr) {
-      console.warn('[TransferService] Post-commit fraud evaluation error:', fraudErr.message);
+      logger.warn({ err: fraudErr }, `[TransferService] Post-commit fraud evaluation error: ${fraudErr.message}`);
     }
 
     // 14. Trigger immediate Outbox Relay flush to Kafka (fail-safe)
     processPendingOutboxEvents({ limit: 20 }).catch((outboxErr) => {
-      console.warn('[TransferService] Post-commit outbox flush warning:', outboxErr.message);
+      logger.warn({ err: outboxErr }, `[TransferService] Post-commit outbox flush warning: ${outboxErr.message}`);
     });
 
 
+
+    // 15. Record Prometheus metrics for successful transfer
+    try {
+      transactionsTotal.inc({ status: 'success' });
+      transactionAmountTotal.inc(
+        { currency: senderAccount.currency || 'INR' },
+        Number(transferAmount)
+      );
+    } catch {}
 
     return {
       transaction: transactionInsert.rows[0],
@@ -247,11 +258,14 @@ export const transferFunds = async ({
       },
     };
   } catch (error) {
+    try {
+      transactionsTotal.inc({ status: 'failed' });
+    } catch {}
     // 11. Roll back all tentative updates if anything failed
     try {
       await client.query('ROLLBACK');
     } catch (rollbackError) {
-      console.error('Error during transaction rollback:', rollbackError);
+      logger.error({ err: rollbackError }, `Error during transaction rollback: ${rollbackError.message || rollbackError}`);
     }
     throw error;
   } finally {
@@ -272,23 +286,14 @@ export const transferFunds = async ({
  */
 export const getTransactionHistory = async ({
   userId,
-  page = 1,
+  page = null,
   limit = 10,
   accountId = null,
+  cursor = null,
 }) => {
-  const pageNum = Math.max(1, parseInt(page, 10) || 1);
   const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 10));
-  const offset = (pageNum - 1) * limitNum;
 
-  let countQuery = `
-    SELECT COUNT(*) AS total
-    FROM transactions t
-    JOIN accounts s_acc ON t.sender_account_id = s_acc.id
-    JOIN accounts r_acc ON t.receiver_account_id = r_acc.id
-    WHERE (s_acc.user_id = $1 OR r_acc.user_id = $1)
-  `;
-  const countParams = [userId];
-
+  // Base data query
   let dataQuery = `
     SELECT 
       t.id,
@@ -317,21 +322,80 @@ export const getTransactionHistory = async ({
   const dataParams = [userId];
 
   if (accountId) {
-    countQuery += ` AND (t.sender_account_id = $2 OR t.receiver_account_id = $2)`;
-    countParams.push(accountId);
-
     dataQuery += ` AND (t.sender_account_id = $2 OR t.receiver_account_id = $2)`;
     dataParams.push(accountId);
   }
 
-  // Count total matching records
+  // Path A: Scalable Keyset / Cursor Pagination (when cursor param is provided or requested)
+  if (cursor) {
+    let parsedCursor = null;
+    try {
+      const decoded = Buffer.from(cursor, 'base64').toString('utf8');
+      parsedCursor = JSON.parse(decoded);
+    } catch {}
+
+    if (parsedCursor?.createdAt && parsedCursor?.id) {
+      const dateParamIdx = dataParams.length + 1;
+      const idParamIdx = dataParams.length + 2;
+      dataQuery += ` AND (t.created_at < $${dateParamIdx} OR (t.created_at = $${dateParamIdx} AND t.id < $${idParamIdx}))`;
+      dataParams.push(new Date(parsedCursor.createdAt), parsedCursor.id);
+    }
+
+    // Fetch limit + 1 to determine if next page exists without full COUNT(*)
+    const fetchLimit = limitNum + 1;
+    const limitIdx = dataParams.length + 1;
+    dataQuery += ` ORDER BY t.created_at DESC, t.id DESC LIMIT $${limitIdx}`;
+    dataParams.push(fetchLimit);
+
+    const transactionsResult = await pool.query(dataQuery, dataParams);
+    const rows = transactionsResult.rows;
+
+    const hasMore = rows.length > limitNum;
+    const transactions = hasMore ? rows.slice(0, limitNum) : rows;
+
+    let nextCursor = null;
+    if (hasMore && transactions.length > 0) {
+      const lastItem = transactions[transactions.length - 1];
+      nextCursor = Buffer.from(
+        JSON.stringify({ createdAt: lastItem.created_at, id: lastItem.id })
+      ).toString('base64');
+    }
+
+    return {
+      transactions,
+      pagination: {
+        type: 'cursor',
+        limit: limitNum,
+        hasMore,
+        nextCursor,
+      },
+    };
+  }
+
+  // Path B: Traditional Offset Pagination (100% backward compatible for existing callers & tests)
+  const pageNum = Math.max(1, parseInt(page, 10) || 1);
+  const offset = (pageNum - 1) * limitNum;
+
+  let countQuery = `
+    SELECT COUNT(*) AS total
+    FROM transactions t
+    JOIN accounts s_acc ON t.sender_account_id = s_acc.id
+    JOIN accounts r_acc ON t.receiver_account_id = r_acc.id
+    WHERE (s_acc.user_id = $1 OR r_acc.user_id = $1)
+  `;
+  const countParams = [userId];
+
+  if (accountId) {
+    countQuery += ` AND (t.sender_account_id = $2 OR t.receiver_account_id = $2)`;
+    countParams.push(accountId);
+  }
+
   const countResult = await pool.query(countQuery, countParams);
   const total = parseInt(countResult.rows[0].total, 10);
 
-  // Fetch paginated records sorted by created_at DESC
   const limitIndex = dataParams.length + 1;
   const offsetIndex = dataParams.length + 2;
-  dataQuery += ` ORDER BY t.created_at DESC LIMIT $${limitIndex} OFFSET $${offsetIndex}`;
+  dataQuery += ` ORDER BY t.created_at DESC, t.id DESC LIMIT $${limitIndex} OFFSET $${offsetIndex}`;
   dataParams.push(limitNum, offset);
 
   const transactionsResult = await pool.query(dataQuery, dataParams);
@@ -340,6 +404,7 @@ export const getTransactionHistory = async ({
   return {
     transactions: transactionsResult.rows,
     pagination: {
+      type: 'offset',
       total,
       page: pageNum,
       limit: limitNum,

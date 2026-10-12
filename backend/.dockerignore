@@ -1,0 +1,17 @@
+# Ignore node_modules so local Windows binaries aren't copied into the Linux container
+node_modules
+npm-debug.log
+
+# Ignore local environment file (production credentials must be injected via environment variables)
+.env
+.env.local
+
+# Ignore git and logs
+.git
+.gitignore
+*.log
+
+# Ignore test coverage and scratch files
+coverage
+tests
+scratch

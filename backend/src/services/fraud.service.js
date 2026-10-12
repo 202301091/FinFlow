@@ -1,6 +1,7 @@
 import { pool } from '../config/db.js';
 import { ApiError } from '../utils/ApiError.js';
 import { createNotification } from './notification.service.js';
+import logger from '../config/logger.js';
 
 /**
  * Standard thresholds and risk score weights for FinFlow fraud rules.
@@ -284,13 +285,13 @@ export const evaluateAndRecordTransferRisk = async ({
           },
         });
       } catch (notifErr) {
-        console.warn('[FraudService] Failed to send security notice notification:', notifErr.message);
+        logger.warn({ err: notifErr }, `[FraudService] Failed to send security notice notification: ${notifErr.message}`);
       }
     }
 
     return record;
   } catch (error) {
-    console.error('[FraudService] Failed to evaluate transfer risk post-commit:', error.message);
+    logger.error({ err: error }, `[FraudService] Failed to evaluate transfer risk post-commit: ${error.message}`);
     return null;
   }
 };

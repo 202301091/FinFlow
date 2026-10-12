@@ -1,4 +1,5 @@
 import { pool } from '../config/db.js';
+import logger from '../config/logger.js';
 
 // Keys that must NEVER be stored in audit logs
 const SENSITIVE_KEYS = new Set([
@@ -93,7 +94,7 @@ export const createAuditLog = async ({
 
     return result.rows[0];
   } catch (error) {
-    console.error('Failed to create audit log:', error.message);
+    logger.error({ err: error }, `Failed to create audit log: ${error.message}`);
     throw error;
   }
 };

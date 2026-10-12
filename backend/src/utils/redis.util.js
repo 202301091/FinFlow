@@ -1,4 +1,5 @@
 import { redisClient, isRedisAvailable } from '../config/redis.js';
+import logger from '../config/logger.js';
 
 /**
  * Safe GET operation from Redis with JSON parsing and fail-open error handling.
@@ -23,7 +24,7 @@ export const getCache = async (key) => {
       return rawData;
     }
   } catch (error) {
-    console.warn(`[Redis Cache] GET failed for key "${key}":`, error.message);
+    logger.warn({ err: error, key }, `[Redis Cache] GET failed for key "${key}": ${error.message}`);
     return null;
   }
 };
@@ -46,7 +47,7 @@ export const setCache = async (key, value, ttlSeconds = 60) => {
     await redisClient.setEx(key, ttlSeconds, stringValue);
     return true;
   } catch (error) {
-    console.warn(`[Redis Cache] SET failed for key "${key}":`, error.message);
+    logger.warn({ err: error, key }, `[Redis Cache] SET failed for key "${key}": ${error.message}`);
     return false;
   }
 };
@@ -71,7 +72,7 @@ export const deleteCache = async (...keys) => {
     await redisClient.del(flattenedKeys);
     return true;
   } catch (error) {
-    console.warn(`[Redis Cache] DEL failed:`, error.message);
+    logger.warn({ err: error }, `[Redis Cache] DEL failed: ${error.message}`);
     return false;
   }
 };
@@ -103,7 +104,7 @@ export const deleteCacheByPattern = async (pattern) => {
 
     return matchingKeys.length;
   } catch (error) {
-    console.warn(`[Redis Cache] SCAN and DEL failed for pattern "${pattern}":`, error.message);
+    logger.warn({ err: error, pattern }, `[Redis Cache] SCAN and DEL failed for pattern "${pattern}": ${error.message}`);
     return 0;
   }
 };
@@ -137,7 +138,7 @@ export const incrementRateLimit = async (key, windowSeconds = 60) => {
 
     return { currentCount, ttl };
   } catch (error) {
-    console.warn(`[Redis RateLimiter] Atomic INCR failed for key "${key}":`, error.message);
+    logger.warn({ err: error, key }, `[Redis RateLimiter] Atomic INCR failed for key "${key}": ${error.message}`);
     return null;
   }
 };

@@ -5,6 +5,10 @@ import { ApiError } from './utils/ApiError.js';
 import { ApiResponse } from './utils/ApiResponse.js';
 import { requestIdMiddleware } from './middleware/requestId.middleware.js';
 import { errorHandler } from './middleware/error.middleware.js';
+import { httpLogger } from './config/logger.js';
+import { pool } from './config/db.js';
+import { isRedisAvailable } from './config/redis.js';
+import { register, metricsMiddleware } from './config/metrics.js';
 
 // Route imports
 import userRouter from './routes/user.routes.js';
@@ -15,8 +19,13 @@ import fraudRouter from './routes/fraud.routes.js';
 
 const app = express();
 
+// Trust reverse proxy / load balancer headers for client IP extraction in multi-instance deployments
+app.set('trust proxy', true);
+
 // Attach Request ID middleware early for all requests and logging
 app.use(requestIdMiddleware);
+app.use(httpLogger);
+app.use(metricsMiddleware);
 
 app.use(cors({
     origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
@@ -28,11 +37,46 @@ app.use(express.urlencoded({ extended: true, limit: '20kb' })); // Use for parsi
 app.use(express.static('public')); // Serve static files from the 'public' directory
 app.use(cookieParser()); // Use for parsing cookies
 
-// Health check endpoint
-app.get('/health', (req, res) => {
+// Liveness probe (shallow, fast, no DB call)
+app.get(['/health', '/health/live'], (req, res) => {
     return res.status(200).json(
-        new ApiResponse(200, { status: 'OK', uptime: process.uptime() }, 'Server is healthy')
+        new ApiResponse(200, { status: 'UP', uptime: process.uptime() }, 'Service is live')
     );
+});
+
+// Readiness probe (deep check: verifies PostgreSQL and Redis availability)
+app.get('/health/ready', async (req, res) => {
+    try {
+        await pool.query('SELECT 1');
+        const redisReady = isRedisAvailable();
+
+        return res.status(200).json(
+            new ApiResponse(
+                200,
+                {
+                    status: 'READY',
+                    checks: {
+                        database: 'UP',
+                        redis: redisReady ? 'UP' : 'DEGRADED',
+                    },
+                },
+                'Instance is ready to serve traffic'
+            )
+        );
+    } catch (error) {
+        return res.status(503).json(
+            new ApiError(503, 'Instance not ready: database connection unavailable')
+        );
+    }
+});
+
+app.get('/metrics', async (req, res) => {
+    try {
+        res.set('Content-Type', register.contentType);
+        res.end(await register.metrics());
+    } catch (error) {
+        res.status(500).send(`Error collecting metrics: ${error.message}`);
+    }
 });
 
 // API Routes

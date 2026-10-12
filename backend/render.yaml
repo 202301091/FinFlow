@@ -1,0 +1,49 @@
+# Render Blueprint Specification for FinFlow Backend
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: finflow-backend
+    runtime: node
+    plan: starter
+    region: oregon
+    rootDir: .
+    buildCommand: npm install
+    startCommand: npm start
+    # Render's internal load balancer uses this health check path for zero-downtime rolling deploys
+    healthCheckPath: /health/live
+    autoDeploy: true
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Render dynamically provides PORT, but 10000 is default
+      - key: PORT
+        value: 10000
+      # PostgreSQL configuration with connection pool limit for multi-instance scaling
+      - key: DB_POOL_MAX
+        value: 5
+      - key: DATABASE_URL
+        sync: false # Connect to your Render PostgreSQL database instance
+      # Redis configuration for distributed caching & rate limiting
+      - key: REDIS_URL
+        sync: false # Connect to your managed Redis instance (e.g. Upstash or Render Redis)
+      # JWT secrets
+      - key: JWT_Access_SECRET
+        generateValue: true
+      - key: JWT_Refresh_SECRET
+        generateValue: true
+      # Frontend client URL allowed by CORS
+      - key: CORS_ORIGIN
+        sync: false # e.g. https://your-finflow-frontend.vercel.app
+      # Kafka configuration (Upstash Kafka, Aiven, or Confluent Cloud)
+      - key: KAFKA_BROKERS
+        sync: false
+      - key: KAFKA_CLIENT_ID
+        value: finflow-backend
+      - key: KAFKA_TOPIC_TRANSACTIONS
+        value: transaction-events
+      - key: KAFKA_GROUP_NOTIFICATIONS
+        value: finflow-notifications-group
+      - key: KAFKA_GROUP_FRAUD
+        value: finflow-fraud-group

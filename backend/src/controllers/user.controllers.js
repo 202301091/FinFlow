@@ -4,6 +4,7 @@ import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import { createAuditLog } from '../services/audit.service.js';
 import jwt from 'jsonwebtoken';
+import logger from '../config/logger.js';
 
 const generateToken = (user) => {
   const payload = {
@@ -74,7 +75,7 @@ const createUser = async (req, res) => {
       .status(201)
       .json(new ApiResponse(201, createdUser, "User created successfully"));
   } catch (error) {
-    console.error('Error creating user:', error);
+    logger.error({ err: error }, `Error creating user: ${error.message || error}`);
     return res
       .status(500)
       .json(new ApiError(500, error?.message || "Internal server error"));
@@ -152,7 +153,7 @@ const loginUser = async (req, res) => {
       .status(200)
       .json(new ApiResponse(200, { user: loggedInUser, tokens }, "Login successful"));
   } catch (error) {
-    console.error('Error logging in user:', error);
+    logger.error({ err: error }, `Error logging in user: ${error.message || error}`);
     return res
       .status(500)
       .json(new ApiError(500, error?.message || "Internal server error"));

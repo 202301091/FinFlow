@@ -1,5 +1,6 @@
 import { incrementRateLimit } from '../utils/redis.util.js';
 import { ApiError } from '../utils/ApiError.js';
+import logger from '../config/logger.js';
 
 /**
  * Factory function to create distributed, Redis-backed rate limiting middleware.
@@ -20,11 +21,19 @@ export const createRateLimiter = ({
   return async (req, res, next) => {
     try {
       // 1. Determine client identifier (User ID for authenticated routes, IP for unauthenticated routes)
+      const clientIp =
+        (typeof req.headers['x-forwarded-for'] === 'string'
+          ? req.headers['x-forwarded-for'].split(',')[0].trim()
+          : null) ||
+        req.ip ||
+        req.socket?.remoteAddress ||
+        '127.0.0.1';
+
       const identifier = keyGenerator
         ? keyGenerator(req)
         : req.user?.id
           ? `user:${req.user.id}`
-          : `ip:${req.ip || req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1'}`;
+          : `ip:${clientIp}`;
 
       const key = `ratelimit:${tier}:${identifier}`;
 
@@ -58,7 +67,7 @@ export const createRateLimiter = ({
 
       next();
     } catch (error) {
-      console.error(`[RateLimiter] Error on ${tier}:`, error.message);
+      logger.error({ err: error, tier }, `[RateLimiter] Error on ${tier}: ${error.message}`);
       // Fail-open: Redis is auxiliary defense; never crash HTTP flow on limiter errors
       next();
     }

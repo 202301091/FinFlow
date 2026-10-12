@@ -1,6 +1,7 @@
 import { pool } from '../config/db.js';
 import { ApiError } from '../utils/ApiError.js';
 import { redisClient, isRedisAvailable } from '../config/redis.js';
+import logger from '../config/logger.js';
 
 /**
  * Broadcast notification payload to user's Redis Pub/Sub channel.
@@ -12,7 +13,7 @@ export const publishNotification = async (userId, notification) => {
       await redisClient.publish(channel, JSON.stringify(notification));
     }
   } catch (error) {
-    console.warn('[NotificationService] Failed to publish real-time notification:', error.message);
+    logger.warn({ err: error }, `[NotificationService] Failed to publish real-time notification: ${error.message}`);
   }
 };
 
@@ -142,15 +143,15 @@ export const createTransferNotifications = async ({
     const receiverNotification = receiverRes.status === 'fulfilled' ? receiverRes.value : null;
 
     if (senderRes.status === 'rejected') {
-      console.warn('[NotificationService] Sender notification failed:', senderRes.reason?.message);
+      logger.warn({ err: senderRes.reason }, `[NotificationService] Sender notification failed: ${senderRes.reason?.message}`);
     }
     if (receiverRes.status === 'rejected') {
-      console.warn('[NotificationService] Receiver notification failed:', receiverRes.reason?.message);
+      logger.warn({ err: receiverRes.reason }, `[NotificationService] Receiver notification failed: ${receiverRes.reason?.message}`);
     }
 
     return { senderNotification, receiverNotification };
   } catch (error) {
-    console.error('[NotificationService] Failed to dispatch transfer notifications:', error.message);
+    logger.error({ err: error }, `[NotificationService] Failed to dispatch transfer notifications: ${error.message}`);
     return { senderNotification: null, receiverNotification: null };
   }
 };
