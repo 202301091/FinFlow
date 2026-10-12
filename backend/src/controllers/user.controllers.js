@@ -29,6 +29,27 @@ const createUser = async (req, res) => {
       .json(new ApiError(400, "Name, email, and password are required"));
   }
 
+  if (typeof password !== 'string' || password.length < 6) {
+    return res
+      .status(400)
+      .json(new ApiError(400, "Password must be at least 6 characters long"));
+  }
+
+  const hasLetter = /[A-Za-z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+  const hasSymbol = /[^A-Za-z0-9]/.test(password);
+
+  if (!hasLetter || !hasNumber || !hasSymbol) {
+    return res
+      .status(400)
+      .json(
+        new ApiError(
+          400,
+          "Password must contain at least one letter, one number, and one symbol"
+        )
+      );
+  }
+
   try {
     // Check if the user already exists
     const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email]);

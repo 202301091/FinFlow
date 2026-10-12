@@ -60,6 +60,18 @@ export default function SignupPage() {
       return;
     }
 
+    const hasLetter = /[A-Za-z]/.test(formData.password);
+    const hasNumber = /[0-9]/.test(formData.password);
+    const hasSymbol = /[^A-Za-z0-9]/.test(formData.password);
+
+    if (!hasLetter || !hasNumber || !hasSymbol) {
+      showPopup(
+        'error',
+        'Password must contain at least one letter, one number, and one symbol (e.g. !@#$%).'
+      );
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -222,6 +234,26 @@ export default function SignupPage() {
                   </svg>
                 )}
               </button>
+            </div>
+
+            {/* Real-time Password Requirements Indicators */}
+            <div className="mt-2.5 grid grid-cols-2 gap-1.5 text-[11px]">
+              <span className={`inline-flex items-center gap-1 transition-colors ${formData.password.length >= 6 ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-slate-400'}`}>
+                <span>{formData.password.length >= 6 ? '✓' : '○'}</span>
+                <span>Min. 6 characters</span>
+              </span>
+              <span className={`inline-flex items-center gap-1 transition-colors ${/[A-Za-z]/.test(formData.password) ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-slate-400'}`}>
+                <span>{/[A-Za-z]/.test(formData.password) ? '✓' : '○'}</span>
+                <span>At least 1 letter</span>
+              </span>
+              <span className={`inline-flex items-center gap-1 transition-colors ${/[0-9]/.test(formData.password) ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-slate-400'}`}>
+                <span>{/[0-9]/.test(formData.password) ? '✓' : '○'}</span>
+                <span>At least 1 number</span>
+              </span>
+              <span className={`inline-flex items-center gap-1 transition-colors ${/[^A-Za-z0-9]/.test(formData.password) ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-slate-400'}`}>
+                <span>{/[^A-Za-z0-9]/.test(formData.password) ? '✓' : '○'}</span>
+                <span>At least 1 symbol</span>
+              </span>
             </div>
           </div>
 
