@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { api, getToken, getUser, removeToken } from '@/lib/api';
 import Navbar from '@/components/Navbar';
 import TransferModal from '@/components/TransferModal';
+import SetPinModal from '@/components/SetPinModal';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -14,6 +15,8 @@ export default function DashboardPage() {
   const [user, setUser] = useState(null);
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [hasPin, setHasPin] = useState(true); // default true until fetched
+  const [isSetPinOpen, setIsSetPinOpen] = useState(false);
   const [popup, setPopup] = useState(null); // { type: 'error' | 'success', message: string }
   const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
@@ -53,6 +56,18 @@ export default function DashboardPage() {
     }
   };
 
+  const fetchPinStatus = async () => {
+    try {
+      const res = await api.get('/users/pin-status');
+      if (res?.data) {
+        setHasPin(Boolean(res.data.hasPin));
+      }
+    } catch {
+      const u = getUser();
+      if (u) setHasPin(Boolean(u.hasPin));
+    }
+  };
+
   useEffect(() => {
     const token = getToken();
     if (!token) {
@@ -64,7 +79,58 @@ export default function DashboardPage() {
     setUser(cachedUser);
 
     fetchAccounts();
+    fetchPinStatus();
+
+    // Synchronize PIN & user updates in real-time across components & tabs
+    const handlePinUpdated = (e) => {
+      const isConfigured = e?.detail?.hasPin !== undefined ? Boolean(e.detail.hasPin) : true;
+      setHasPin(isConfigured);
+      const u = getUser();
+      if (u) setUser({ ...u, hasPin: isConfigured });
+    };
+
+    const handleUserUpdated = (e) => {
+      if (e?.detail) {
+        setUser(e.detail);
+        if (typeof e.detail.hasPin === 'boolean') {
+          setHasPin(e.detail.hasPin);
+        }
+      }
+    };
+
+    const handleStorageChange = (e) => {
+      if (e.key === 'finflow_user' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (parsed) {
+            setUser(parsed);
+            if (typeof parsed.hasPin === 'boolean') {
+              setHasPin(parsed.hasPin);
+            }
+          }
+        } catch {}
+      }
+    };
+
+    window.addEventListener('finflow:pin-updated', handlePinUpdated);
+    window.addEventListener('finflow:user-updated', handleUserUpdated);
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('finflow:pin-updated', handlePinUpdated);
+      window.removeEventListener('finflow:user-updated', handleUserUpdated);
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, [router]);
+
+  const handleOpenTransfer = () => {
+    if (!hasPin) {
+      showPopup('error', '⚠️ Security Action Required: You must set your 6-digit Transaction PIN before making transfers.');
+      setIsSetPinOpen(true);
+      return;
+    }
+    setIsTransferOpen(true);
+  };
 
   const handleTransferSuccess = (result) => {
     showPopup('success', `Transfer of ₹${parseFloat(result.transaction.amount).toFixed(2)} completed successfully!`);
@@ -191,10 +257,37 @@ export default function DashboardPage() {
       </AnimatePresence>
 
       {/* Shared Navigation Bar */}
-      <Navbar onOpenTransfer={() => setIsTransferOpen(true)} />
+      <Navbar onOpenTransfer={handleOpenTransfer} hasPin={hasPin} />
 
       {/* Main Dashboard Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+        {/* Sleek Security PIN Banner */}
+        {!hasPin && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-2xl px-5 py-3.5 bg-amber-500/10 border border-amber-500/25 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-950 dark:text-amber-100"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-xl shrink-0">🔒</span>
+              <div>
+                <p className="text-xs font-bold text-slate-900 dark:text-white">
+                  Security PIN Required
+                </p>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
+                  Set up your 6-digit PIN to authorize transfers and protect your funds against unauthorized physical access.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsSetPinOpen(true)}
+              className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs rounded-xl shadow-sm transition-all cursor-pointer whitespace-nowrap self-start sm:self-auto"
+            >
+              Set PIN Now →
+            </button>
+          </motion.div>
+        )}
+
         {/* Refined Net Balance Card - Framer Motion Entry */}
         <motion.section
           initial={{ opacity: 0, y: 25, scale: 0.98 }}
@@ -229,7 +322,7 @@ export default function DashboardPage() {
             <motion.button
               whileHover={{ scale: 1.04, y: -2 }}
               whileTap={{ scale: 0.97 }}
-              onClick={() => setIsTransferOpen(true)}
+              onClick={handleOpenTransfer}
               className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold px-6 py-3.5 rounded-xl shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all duration-200 cursor-pointer text-sm"
             >
               <span className="text-lg leading-none">💸</span>
@@ -363,7 +456,19 @@ export default function DashboardPage() {
         isOpen={isTransferOpen}
         onClose={() => setIsTransferOpen(false)}
         accounts={accounts}
+        hasPin={hasPin}
         onSuccess={handleTransferSuccess}
+      />
+
+      {/* Set / Update PIN Modal */}
+      <SetPinModal
+        isOpen={isSetPinOpen}
+        onClose={() => setIsSetPinOpen(false)}
+        onSuccess={() => {
+          setHasPin(true);
+          fetchPinStatus();
+          showPopup('success', '6-digit Transaction Security PIN configured successfully!');
+        }}
       />
     </div>
   );

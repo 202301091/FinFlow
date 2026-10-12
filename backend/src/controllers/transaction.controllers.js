@@ -1,3 +1,5 @@
+import bcrypt from 'bcrypt';
+import { pool } from '../config/db.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ApiResponse } from '../utils/ApiResponse.js';
 import {
@@ -63,6 +65,40 @@ export const transferMoney = async (req, res, next) => {
 
     if (trimmedSenderId === trimmedReceiverId) {
       throw new ApiError(400, 'Sender and receiver accounts cannot be the same');
+    }
+
+    const transactionPin =
+      req.body?.transactionPin ||
+      req.body?.pin ||
+      req.header('x-transaction-pin') ||
+      req.header('X-Transaction-PIN');
+
+    // Verify 6-digit Transaction PIN if configured on user's account
+    const userResult = await pool.query('SELECT transaction_pin_hash FROM users WHERE id = $1', [userId]);
+    const dbUser = userResult.rows[0];
+
+    if (dbUser?.transaction_pin_hash) {
+      if (!transactionPin || typeof transactionPin !== 'string' || !/^\d{6}$/.test(String(transactionPin).trim())) {
+        throw new ApiError(400, 'A valid 6-digit Transaction PIN is required to authorize this transfer');
+      }
+
+      const isPinValid = await bcrypt.compare(String(transactionPin).trim(), dbUser.transaction_pin_hash);
+      if (!isPinValid) {
+        await createAuditLog({
+          userId,
+          action: 'TRANSFER_PIN_FAILED',
+          resourceType: 'transaction',
+          resourceId: null,
+          requestId: req.id,
+          status: 'FAILURE',
+          metadata: { senderAccountId: trimmedSenderId, reason: 'Incorrect transaction PIN' },
+        });
+        throw new ApiError(401, 'Invalid transaction PIN. Transfer authorization failed');
+      }
+    } else if (transactionPin) {
+      throw new ApiError(400, 'Transaction PIN is not configured on this account. Please set a 6-digit PIN in settings first');
+    } else if (process.env.ENFORCE_PIN === 'true') {
+      throw new ApiError(403, 'Transaction PIN has not been configured. Please set your 6-digit PIN before making transfers');
     }
 
     // Compute deterministic request hash

@@ -137,6 +137,8 @@ const loginUser = async (req, res) => {
     const loggedInUser = { ...user };
     delete loggedInUser.password;
     delete loggedInUser.password_hash;
+    loggedInUser.hasPin = Boolean(loggedInUser.transaction_pin_hash);
+    delete loggedInUser.transaction_pin_hash;
 
     // Record audit log for successful login
     await createAuditLog({
@@ -160,4 +162,97 @@ const loginUser = async (req, res) => {
   }
 };
 
-export { createUser, loginUser };
+/**
+ * Set or update the 6-digit transaction PIN
+ * POST /api/v1/users/set-pin
+ * Requires account password confirmation and 6-digit PIN
+ */
+const setTransactionPin = async (req, res) => {
+  const userId = req.user?.id;
+  const { pin, password } = req.body;
+
+  if (!userId) {
+    return res.status(401).json(new ApiError(401, 'Authentication required'));
+  }
+
+  if (!pin || typeof pin !== 'string' || !/^\d{6}$/.test(pin.trim())) {
+    return res.status(400).json(new ApiError(400, 'PIN must be exactly 6 numeric digits'));
+  }
+
+  if (!password || typeof password !== 'string') {
+    return res.status(400).json(new ApiError(400, 'Current account password is required to authorize PIN change'));
+  }
+
+  try {
+    const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
+    if (userResult.rows.length === 0) {
+      return res.status(404).json(new ApiError(404, 'User not found'));
+    }
+
+    const user = userResult.rows[0];
+    const isPasswordValid = await bcrypt.compare(password, user.password_hash || user.password);
+
+    if (!isPasswordValid) {
+      await createAuditLog({
+        userId,
+        action: 'TRANSACTION_PIN_SET_FAILED',
+        resourceType: 'user',
+        resourceId: userId,
+        requestId: req.id,
+        status: 'FAILURE',
+        metadata: { reason: 'Incorrect account password' },
+      });
+      return res.status(401).json(new ApiError(401, 'Invalid account password'));
+    }
+
+    const hashedPin = await bcrypt.hash(pin.trim(), 10);
+    await pool.query(
+      'UPDATE users SET transaction_pin_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+      [hashedPin, userId]
+    );
+
+    await createAuditLog({
+      userId,
+      action: 'TRANSACTION_PIN_SET_SUCCESS',
+      resourceType: 'user',
+      resourceId: userId,
+      requestId: req.id,
+      status: 'SUCCESS',
+      metadata: { pinLength: 6 },
+    });
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, { hasPin: true }, '6-digit Transaction PIN configured successfully'));
+  } catch (error) {
+    logger.error({ err: error }, `Error setting transaction PIN: ${error.message || error}`);
+    return res.status(500).json(new ApiError(500, error?.message || 'Internal server error'));
+  }
+};
+
+/**
+ * Check whether the user has configured a transaction PIN
+ * GET /api/v1/users/pin-status
+ */
+const getPinStatus = async (req, res) => {
+  const userId = req.user?.id;
+  if (!userId) {
+    return res.status(401).json(new ApiError(401, 'Authentication required'));
+  }
+
+  try {
+    const userResult = await pool.query('SELECT transaction_pin_hash FROM users WHERE id = $1', [userId]);
+    if (userResult.rows.length === 0) {
+      return res.status(404).json(new ApiError(404, 'User not found'));
+    }
+
+    const hasPin = Boolean(userResult.rows[0].transaction_pin_hash);
+    return res.status(200).json(new ApiResponse(200, { hasPin }, 'PIN status retrieved'));
+  } catch (error) {
+    logger.error({ err: error }, `Error checking PIN status: ${error.message || error}`);
+    return res.status(500).json(new ApiError(500, error?.message || 'Internal server error'));
+  }
+};
+
+export { createUser, loginUser, setTransactionPin, getPinStatus };
+

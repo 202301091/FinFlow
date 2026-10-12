@@ -14,6 +14,11 @@ const logger = pino({
     'token',
     'authorization',
     'refreshToken',
+    'pin',
+    'transactionPin',
+    'transaction_pin',
+    'transaction_pin_hash',
+    'pinHash',
   ],
 });
 

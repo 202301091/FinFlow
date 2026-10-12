@@ -1,3 +1,5 @@
+import { getOrSetTransferIdempotencyKey, clearTransferIdempotencyKey } from './idempotency';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api/v1';
 
 // Token & Auth Storage helpers
@@ -35,8 +37,13 @@ export const setUser = (user) => {
   if (typeof window === 'undefined') return;
   if (user) {
     localStorage.setItem('finflow_user', JSON.stringify(user));
+    window.dispatchEvent(new CustomEvent('finflow:user-updated', { detail: user }));
+    if (typeof user.hasPin === 'boolean') {
+      window.dispatchEvent(new CustomEvent('finflow:pin-updated', { detail: { hasPin: user.hasPin } }));
+    }
   } else {
     localStorage.removeItem('finflow_user');
+    window.dispatchEvent(new CustomEvent('finflow:user-updated', { detail: null }));
   }
 };
 
@@ -58,6 +65,19 @@ async function request(endpoint, options = {}) {
   const token = getToken();
   if (token && !headers['Authorization']) {
     headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  // Ensure Idempotency-Key header is always attached for transfer endpoints to prevent duplicate charges
+  if (endpoint.includes('/transfer') && !headers['Idempotency-Key'] && !headers['idempotency-key']) {
+    let bodyObj = null;
+    try {
+      bodyObj = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
+    } catch {}
+    headers['Idempotency-Key'] = getOrSetTransferIdempotencyKey(
+      bodyObj?.senderAccountId,
+      bodyObj?.receiverAccountId,
+      bodyObj?.amount
+    );
   }
 
   const config = {
@@ -92,6 +112,19 @@ async function request(endpoint, options = {}) {
     error.statusCode = response.status;
     error.data = data;
     throw error;
+  }
+
+  // On transfer success, clear the persistent idempotency key from storage
+  if (endpoint.includes('/transfer')) {
+    let bodyObj = null;
+    try {
+      bodyObj = typeof config.body === 'string' ? JSON.parse(config.body) : config.body;
+    } catch {}
+    clearTransferIdempotencyKey(
+      bodyObj?.senderAccountId,
+      bodyObj?.receiverAccountId,
+      bodyObj?.amount
+    );
   }
 
   return data;

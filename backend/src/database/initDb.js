@@ -16,7 +16,9 @@ export const initDb = async () => {
     await pool.query(schemaSql);
 
     // Ensure transactions table does not have duplicate idempotency_key column
+    // and ensure users table has transaction_pin_hash
     await pool.query(`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS transaction_pin_hash TEXT;
       ALTER TABLE transactions DROP COLUMN IF EXISTS idempotency_key;
       DROP INDEX IF EXISTS idx_idempotency_lookup;
       DO $$
