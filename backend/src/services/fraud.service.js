@@ -26,20 +26,6 @@ export const FRAUD_RULES = {
   FLAG_THRESHOLD_SCORE: 40,
 };
 
-/**
- * Evaluate transfer risk using heuristic rules.
- * NOTE: FinFlow does not block transactions; transfers always proceed and
- * suspicious transactions are marked FLAGGED for manual compliance inspection.
- *
- * @param {Object} params
- * @param {import('pg').PoolClient} [params.client=pool] - Optional client for transaction context
- * @param {string} params.senderAccountId - Sender account UUID
- * @param {string} params.receiverAccountId - Receiver account UUID
- * @param {string} params.userId - Authenticated user UUID
- * @param {number|string} params.amount - Transfer amount
- * @param {Object} [params.rulesConfig=FRAUD_RULES] - Configurable rule thresholds
- * @returns {Promise<Object>} Risk evaluation result
- */
 export const evaluateTransferRisk = async ({
   client = pool,
   senderAccountId,

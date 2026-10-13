@@ -39,7 +39,6 @@ export default function ThemeToggle({ className = "" }) {
       title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
     >
       {theme === 'dark' ? (
-        /* Sun Icon */
         <svg
           xmlns="http://www.w3.org/2000/svg"
           fill="none"
@@ -55,7 +54,6 @@ export default function ThemeToggle({ className = "" }) {
           />
         </svg>
       ) : (
-        /* Moon Icon */
         <svg
           xmlns="http://www.w3.org/2000/svg"
           fill="none"

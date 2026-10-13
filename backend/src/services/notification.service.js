@@ -17,17 +17,6 @@ export const publishNotification = async (userId, notification) => {
   }
 };
 
-/**
- * Persist a single notification record into PostgreSQL and broadcast via Redis Pub/Sub.
- *
- * @param {Object} params
- * @param {string} params.userId - Recipient user UUID
- * @param {string} params.type - Notification type identifier (e.g. 'TRANSFER_SENT', 'TRANSFER_RECEIVED')
- * @param {string} params.title - Short summary title
- * @param {string} params.message - Human-readable notification body
- * @param {Object} [params.metadata] - Optional contextual metadata JSON
- * @returns {Promise<Object>} Created notification row
- */
 export const createNotification = async ({
   userId,
   type,
@@ -50,27 +39,10 @@ export const createNotification = async ({
   );
 
   const createdNotification = result.rows[0];
-
-  // Real-time broadcast to user's channel via Redis Pub/Sub
   await publishNotification(userId, createdNotification);
-
   return createdNotification;
 };
 
-/**
- * Dispatch personalized transfer notifications to both sender and receiver post-commit.
- *
- * @param {Object} params
- * @param {Object} params.transaction - The committed transaction row
- * @param {string} params.senderUserId - User ID of the sender
- * @param {string} params.receiverUserId - User ID of the recipient
- * @param {Object} params.senderAccount - Sender account record
- * @param {Object} params.receiverAccount - Receiver account record
- * @param {number} params.amount - Transfer amount
- * @param {string} [params.currency='INR'] - Currency code
- * @param {string} [params.description] - Transfer memo/description
- * @returns {Promise<{ senderNotification: Object|null, receiverNotification: Object|null }>}
- */
 export const createTransferNotifications = async ({
   transaction,
   senderUserId,
@@ -82,7 +54,6 @@ export const createTransferNotifications = async ({
   description = null,
 }) => {
   try {
-    // 1. Fetch user display names
     const usersResult = await pool.query(
       'SELECT id, name, email FROM users WHERE id IN ($1, $2)',
       [senderUserId, receiverUserId]
@@ -97,7 +68,6 @@ export const createTransferNotifications = async ({
     const formattedAmount = Number(amount).toFixed(2);
     const currencyPrefix = currency === 'INR' ? '₹' : `${currency} `;
 
-    // 2. Prepare sender debit notification payload
     const senderPayload = {
       userId: senderUserId,
       type: 'TRANSFER_SENT',
@@ -115,7 +85,6 @@ export const createTransferNotifications = async ({
       },
     };
 
-    // 3. Prepare receiver credit notification payload
     const receiverPayload = {
       userId: receiverUserId,
       type: 'TRANSFER_RECEIVED',
@@ -133,7 +102,6 @@ export const createTransferNotifications = async ({
       },
     };
 
-    // 4. Concurrently insert both notification rows
     const [senderRes, receiverRes] = await Promise.allSettled([
       createNotification(senderPayload),
       createNotification(receiverPayload),

@@ -65,10 +65,8 @@ export default function TransactionsPage() {
 
   return (
     <div className="min-h-screen bg-slate-50/80 dark:bg-[#070B14] text-slate-900 dark:text-slate-100 transition-colors duration-300">
-      {/* Navigation Bar */}
       <Navbar onOpenTransfer={() => setIsTransferOpen(true)} />
 
-      {/* Popup Notifications */}
       <AnimatePresence>
         {popup && (
           <motion.div
@@ -100,16 +98,13 @@ export default function TransactionsPage() {
         )}
       </AnimatePresence>
 
-      {/* Main Page Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 w-full overflow-x-hidden">
-        {/* Banner with Transfer CTA & Framer Motion entry */}
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, ease: 'easeOut' }}
           className="relative rounded-3xl p-5 sm:p-8 bg-gradient-to-br from-slate-900 via-[#0B1E30] to-[#0A1622] text-white border border-slate-800 shadow-2xl shadow-slate-950/20 flex flex-col sm:flex-row sm:items-center justify-between gap-5 sm:gap-6 overflow-hidden"
         >
-          {/* Subtle Ambient Glows */}
           <div className="absolute -top-24 -right-24 w-80 h-80 bg-sky-500/15 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
@@ -139,11 +134,9 @@ export default function TransactionsPage() {
           </div>
         </motion.div>
 
-        {/* Transaction History Component with Pagination & Details Modal */}
         <TransactionHistory refreshTrigger={historyTrigger} />
       </main>
 
-      {/* Transfer Modal */}
       <TransferModal
         isOpen={isTransferOpen}
         onClose={() => setIsTransferOpen(false)}

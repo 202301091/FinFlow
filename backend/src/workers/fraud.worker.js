@@ -26,22 +26,10 @@ export const FRAUD_CONFIG = {
 // In-memory sliding window cache for account transaction timestamps
 const accountVelocityTracker = new Map();
 
-/**
- * Reset or clear the velocity tracker (useful for testing and memory maintenance).
- */
 export const clearVelocityTracker = () => {
   accountVelocityTracker.clear();
 };
 
-/**
- * Check velocity burst for an account within a sliding time window.
- *
- * @param {string} accountId
- * @param {number} currentTimestampMs
- * @param {number} maxCount
- * @param {number} windowMs
- * @returns {{ exceeded: boolean, count: number }}
- */
 export const checkAccountVelocity = (
   accountId,
   currentTimestampMs = Date.now(),
@@ -51,7 +39,6 @@ export const checkAccountVelocity = (
   const cutoff = currentTimestampMs - windowMs;
   const history = accountVelocityTracker.get(accountId) || [];
 
-  // Prune expired timestamps
   const activeTimestamps = history.filter((t) => t > cutoff);
   activeTimestamps.push(currentTimestampMs);
 
@@ -63,12 +50,6 @@ export const checkAccountVelocity = (
   };
 };
 
-/**
- * Evaluate heuristic fraud detection rules against a transaction event.
- *
- * @param {Object} event - Domain event adhering to TRANSACTION_COMPLETED contract
- * @returns {Object} Evaluation summary with flagged status, risk score, and triggered rules
- */
 export const evaluateFraudRules = (event) => {
   if (!isValidTransactionCompletedEvent(event)) {
     return {
@@ -126,12 +107,6 @@ export const evaluateFraudRules = (event) => {
   };
 };
 
-/**
- * Handle dispatching / recording of a flagged fraud alert.
- *
- * @param {Object} evaluation - Evaluation result from evaluateFraudRules
- * @returns {Promise<Object>} Persisted alert record
- */
 export const dispatchFraudAlert = async (evaluation) => {
   const alertRecord = {
     alertId: crypto.randomUUID(),
@@ -157,12 +132,6 @@ export const dispatchFraudAlert = async (evaluation) => {
   return alertRecord;
 };
 
-/**
- * Process a transaction event for fraud analysis.
- *
- * @param {Object} event
- * @returns {Promise<Object>} Processing result
- */
 export const processFraudEvent = async (event) => {
   if (!isValidTransactionCompletedEvent(event)) {
     return {
@@ -200,14 +169,6 @@ export const processFraudEvent = async (event) => {
   };
 };
 
-/**
- * KafkaJS message handler for fraud consumer.
- *
- * @param {Object} payload
- * @param {string} payload.topic
- * @param {number} payload.partition
- * @param {import('kafkajs').KafkaMessage} payload.message
- */
 export const handleFraudMessage = async ({ topic, partition, message }) => {
   let parsedEvent = null;
   try {
@@ -251,14 +212,6 @@ export const handleFraudMessage = async ({ topic, partition, message }) => {
 let consumerInstance = null;
 let isShuttingDown = false;
 
-/**
- * Start the fraud detection consumer worker.
- *
- * @param {Object} [options]
- * @param {string} [options.groupId=KAFKA_CONSUMER_GROUPS.FRAUD]
- * @param {string} [options.topic=KAFKA_TOPICS.TRANSACTIONS]
- * @returns {Promise<import('kafkajs').Consumer>}
- */
 export const startFraudWorker = async ({
   groupId = KAFKA_CONSUMER_GROUPS.FRAUD,
   topic = KAFKA_TOPICS.TRANSACTIONS,

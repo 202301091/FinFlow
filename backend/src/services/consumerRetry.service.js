@@ -1,16 +1,6 @@
 import { pool } from '../config/db.js';
 import logger from '../config/logger.js';
 
-/**
- * Execute an asynchronous operation with exponential backoff retries.
- *
- * @template T
- * @param {(attempt: number) => Promise<T>} operation - Asynchronous task
- * @param {Object} [options]
- * @param {number} [options.maxRetries=3] - Maximum retry attempts before giving up
- * @param {number} [options.baseDelayMs=100] - Base delay for exponential backoff
- * @returns {Promise<T>}
- */
 export const executeWithRetry = async (
   operation,
   { maxRetries = 3, baseDelayMs = 100 } = {}
@@ -30,18 +20,6 @@ export const executeWithRetry = async (
   throw lastError;
 };
 
-/**
- * Persist an unprocessable or repeatedly failing message into the consumer_dlq table.
- *
- * @param {Object} params
- * @param {string} params.consumerGroup - Group identifier (e.g. 'finflow-notifications-group')
- * @param {string} params.topic - Kafka topic
- * @param {any} params.event - Deserialized or raw event payload
- * @param {Error|string} params.error - Caught exception
- * @param {number} [params.retryCount=0] - Number of retries attempted
- * @param {Object} [client=pool]
- * @returns {Promise<Object|null>} Saved DLQ record
- */
 export const recordDeadLetter = async (
   { consumerGroup, topic, event, error, retryCount = 0 },
   client = pool

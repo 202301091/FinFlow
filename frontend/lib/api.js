@@ -51,9 +51,6 @@ export const isAuthenticated = () => {
   return !!getToken();
 };
 
-/**
- * Core request wrapper
- */
 async function request(endpoint, options = {}) {
   const url = `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
 
@@ -139,9 +136,6 @@ export const api = {
   delete: (endpoint, options = {}) => request(endpoint, { ...options, method: 'DELETE' }),
 };
 
-/**
- * Notification API helpers
- */
 export const getNotificationStreamUrl = () => {
   const token = getToken();
   return `${API_BASE_URL}/notifications/stream?token=${encodeURIComponent(token || '')}`;
@@ -164,9 +158,6 @@ export const markAllNotificationsRead = async () => {
   return api.patch('/notifications/read-all');
 };
 
-/**
- * Transaction API helpers (supports scalable keyset cursor pagination)
- */
 export const getTransactions = async ({ cursor = null, page = null, limit = 10, accountId = null } = {}) => {
   const params = new URLSearchParams();
   if (cursor) {

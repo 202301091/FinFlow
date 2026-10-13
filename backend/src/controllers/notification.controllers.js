@@ -19,14 +19,12 @@ export const streamNotifications = async (req, res, next) => {
       throw new ApiError(401, 'User authentication required for notification stream');
     }
 
-    // 1. Establish SSE protocol headers
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no'); // Disable buffering for reverse proxies/NGINX
+    res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders?.();
 
-    // 2. Send initial connection confirmation event
     res.write(
       `data: ${JSON.stringify({
         type: 'CONNECTED',
@@ -37,7 +35,6 @@ export const streamNotifications = async (req, res, next) => {
 
     const channel = `notifications:user:${userId}`;
 
-    // 3. Define subscriber listener callback
     const messageListener = (message) => {
       try {
         res.write(`data: ${message}\n\n`);
@@ -46,19 +43,17 @@ export const streamNotifications = async (req, res, next) => {
       }
     };
 
-    // 4. Subscribe to the user's private Redis channel
     if (redisSubscriber && redisSubscriber.isOpen) {
       await redisSubscriber.subscribe(channel, messageListener);
     } else {
       logger.warn('[SSE] Redis subscriber not ready. Live streaming suspended.');
     }
 
-    // 5. Keep-alive heartbeat comment every 25 seconds to prevent network timeouts
+    // Keep-alive heartbeat every 25 seconds to prevent network timeouts
     const heartbeatTimer = setInterval(() => {
       res.write(': keepalive\n\n');
     }, 25000);
 
-    // 6. Handle client disconnect and release resources
     req.on('close', async () => {
       clearInterval(heartbeatTimer);
       try {

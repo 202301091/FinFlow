@@ -49,7 +49,6 @@ export default function SignupPage() {
     e.preventDefault();
     setPopup(null);
 
-    // Client-side validation
     if (!formData.name.trim() || !formData.email.trim() || !formData.password) {
       showPopup('error', 'All fields (Name, Email, and Password) are required.');
       return;
@@ -94,13 +93,11 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-screen flex flex-col justify-between bg-slate-50/70 dark:bg-[#070B14] text-slate-900 dark:text-slate-100 p-4 sm:p-6 relative overflow-hidden transition-colors duration-300">
-      {/* Background Animated Gradient Glows */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-5xl h-[500px] overflow-hidden pointer-events-none -z-10">
         <div className="absolute -top-32 left-1/3 w-[450px] h-[450px] bg-sky-500/10 dark:bg-sky-600/10 rounded-full blur-3xl animate-pulse-glow" />
         <div className="absolute -top-20 right-1/4 w-[380px] h-[380px] bg-blue-600/10 dark:bg-blue-600/10 rounded-full blur-3xl animate-pulse-glow" />
       </div>
 
-      {/* Top Navbar */}
       <motion.header
         initial={{ opacity: 0, y: -15 }}
         animate={{ opacity: 1, y: 0 }}
@@ -113,7 +110,6 @@ export default function SignupPage() {
         <ThemeToggle />
       </motion.header>
 
-      {/* Interactive Error / Success Popup with AnimatePresence */}
       <AnimatePresence>
         {popup && (
           <motion.div
@@ -150,7 +146,6 @@ export default function SignupPage() {
         )}
       </AnimatePresence>
 
-      {/* Signup Form Card with Framer Motion Entry */}
       <motion.div
         initial={{ opacity: 0, y: 30, scale: 0.97 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -302,7 +297,6 @@ export default function SignupPage() {
         </div>
       </motion.div>
 
-      {/* Footer */}
       <footer className="text-center text-xs text-slate-400 dark:text-slate-500 py-4 z-10">
         &copy; {new Date().getFullYear()} FinFlow. All rights reserved.
       </footer>

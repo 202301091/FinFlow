@@ -4,21 +4,6 @@ export const EVENT_TYPES = {
   TRANSACTION_COMPLETED: 'TRANSACTION_COMPLETED',
 };
 
-/**
- * Factory function to construct a canonical, sanitized TRANSACTION_COMPLETED domain event.
- *
- * @param {Object} params
- * @param {Object} params.transaction - The committed PostgreSQL transaction record
- * @param {string} params.senderUserId - User UUID of the sender
- * @param {string} params.receiverUserId - User UUID of the receiver
- * @param {string} params.senderAccountId - Account UUID debited
- * @param {string} params.receiverAccountId - Account UUID credited
- * @param {number|string} params.amount - Numeric transfer amount
- * @param {string} [params.currency='INR'] - Currency code
- * @param {string} [params.description] - Transaction memo
- * @param {string} [params.requestId] - Distributed trace identifier
- * @returns {Object} Structured domain event
- */
 export const createTransactionCompletedEvent = ({
   transaction,
   senderUserId,
@@ -72,12 +57,6 @@ export const createTransactionCompletedEvent = ({
   };
 };
 
-/**
- * Validate that a deserialized payload adheres to the TRANSACTION_COMPLETED event contract.
- *
- * @param {any} event
- * @returns {boolean}
- */
 export const isValidTransactionCompletedEvent = (event) => {
   if (!event || typeof event !== 'object') return false;
   if (!event.eventId || typeof event.eventId !== 'string') return false;

@@ -221,7 +221,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-slate-50/80 dark:bg-[#070B14] text-slate-900 dark:text-slate-100 transition-colors duration-300">
-      {/* Interactive Error / Success Popup with AnimatePresence */}
       <AnimatePresence>
         {popup && (
           <motion.div
@@ -256,12 +255,9 @@ export default function DashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* Shared Navigation Bar */}
       <Navbar onOpenTransfer={handleOpenTransfer} hasPin={hasPin} />
 
-      {/* Main Dashboard Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8 w-full overflow-x-hidden">
-        {/* Sleek Security PIN Banner */}
         {!hasPin && (
           <motion.div
             initial={{ opacity: 0, y: -8 }}
@@ -288,14 +284,12 @@ export default function DashboardPage() {
           </motion.div>
         )}
 
-        {/* Refined Net Balance Card - Framer Motion Entry */}
         <motion.section
           initial={{ opacity: 0, y: 25, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
           className="relative rounded-3xl p-5 sm:p-9 bg-gradient-to-br from-slate-900 via-[#0B1E30] to-[#0A1622] text-white border border-slate-800 shadow-2xl shadow-slate-950/25 flex flex-col sm:flex-row sm:items-center justify-between gap-6 overflow-hidden"
         >
-          {/* Subtle Ambient Glows */}
           <div className="absolute -top-24 -right-24 w-96 h-96 bg-sky-500/15 rounded-full blur-3xl pointer-events-none" />
           <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-blue-600/15 rounded-full blur-3xl pointer-events-none" />
 
@@ -342,7 +336,6 @@ export default function DashboardPage() {
           </div>
         </motion.section>
 
-        {/* Accounts List Section with Staggered Framer Motion */}
         <section className="space-y-4">
           <motion.div
             initial={{ opacity: 0, y: 15 }}

@@ -93,7 +93,6 @@ export default function SetPinModal({ isOpen, onClose, onSuccess }) {
           transition={{ duration: 0.25, ease: 'easeOut' }}
           className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative my-auto max-h-[90vh] overflow-y-auto"
         >
-          {/* Header */}
           <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 flex items-center justify-center text-xl">
@@ -115,7 +114,6 @@ export default function SetPinModal({ isOpen, onClose, onSuccess }) {
             </button>
           </div>
 
-          {/* Success / Error Messages */}
           {errorMessage && (
             <div className="mt-4 p-3 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 text-xs flex items-center gap-2">
               <span>⚠️</span>
@@ -130,9 +128,7 @@ export default function SetPinModal({ isOpen, onClose, onSuccess }) {
             </div>
           )}
 
-          {/* Form */}
           <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-            {/* Account Password */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
                 Current Account Password
@@ -155,7 +151,6 @@ export default function SetPinModal({ isOpen, onClose, onSuccess }) {
               {errors.password && <p className="mt-1 text-xs text-red-500">{errors.password}</p>}
             </div>
 
-            {/* New 6-Digit PIN */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
                 New 6-Digit PIN
@@ -182,7 +177,6 @@ export default function SetPinModal({ isOpen, onClose, onSuccess }) {
               {errors.pin && <p className="mt-1 text-xs text-red-500">{errors.pin}</p>}
             </div>
 
-            {/* Confirm PIN */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
                 Confirm 6-Digit PIN
@@ -209,7 +203,6 @@ export default function SetPinModal({ isOpen, onClose, onSuccess }) {
               {errors.confirmPin && <p className="mt-1 text-xs text-red-500">{errors.confirmPin}</p>}
             </div>
 
-            {/* Actions */}
             <div className="pt-3 flex items-center justify-end gap-3">
               <button
                 type="button"

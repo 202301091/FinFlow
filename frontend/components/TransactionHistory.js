@@ -128,7 +128,6 @@ export default function TransactionHistory({ refreshTrigger }) {
 
   return (
     <section className="space-y-4">
-      {/* Header with Motion */}
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -174,14 +173,12 @@ export default function TransactionHistory({ refreshTrigger }) {
         </div>
       </motion.div>
 
-      {/* Main Content Area */}
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, delay: 0.1 }}
         className="bg-white dark:bg-slate-900/90 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-xl shadow-slate-950/5 overflow-hidden"
       >
-        {/* Loading Skeleton */}
         {loading && transactions.length === 0 ? (
           <div className="p-8 space-y-4">
             {[1, 2, 3, 4].map((i) => (
@@ -195,7 +192,6 @@ export default function TransactionHistory({ refreshTrigger }) {
             ))}
           </div>
         ) : error ? (
-          /* Error State */
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -213,7 +209,6 @@ export default function TransactionHistory({ refreshTrigger }) {
             </motion.button>
           </motion.div>
         ) : transactions.length === 0 ? (
-          /* Empty State */
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -229,7 +224,6 @@ export default function TransactionHistory({ refreshTrigger }) {
             </p>
           </motion.div>
         ) : (
-          /* Staggered Animated Transactions List */
           <motion.div
             variants={listVariants}
             initial="hidden"
@@ -263,7 +257,6 @@ export default function TransactionHistory({ refreshTrigger }) {
                   onClick={() => handleViewDetails(tx.id)}
                   className="p-4 sm:p-5 flex items-center justify-between transition-colors cursor-pointer group dark:hover:bg-slate-800/40"
                 >
-                  {/* Left: Direction Icon + Details */}
                   <div className="flex items-center gap-3.5 sm:gap-4 min-w-0">
                     <motion.div
                       whileHover={{ scale: 1.15, rotate: isDebit ? -10 : 10 }}
@@ -306,7 +299,6 @@ export default function TransactionHistory({ refreshTrigger }) {
                     </div>
                   </div>
 
-                  {/* Right: Amount & Receipt Preview */}
                   <div className="text-right shrink-0 ml-4">
                     <p
                       className={`text-base sm:text-lg font-black tracking-tight ${
@@ -327,7 +319,6 @@ export default function TransactionHistory({ refreshTrigger }) {
           </motion.div>
         )}
 
-        {/* Keyset Cursor Pagination & Continuous Stream Controls */}
         {transactions.length > 0 && (
           <div className="p-4 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600 dark:text-slate-400">
             <div className="flex items-center gap-2">
@@ -349,7 +340,6 @@ export default function TransactionHistory({ refreshTrigger }) {
             </div>
 
             <div className="flex items-center gap-2.5">
-              {/* Load More Button (Appends subsequent rows into continuous stream) */}
               {hasMore && (
                 <motion.button
                   whileHover={{ scale: 1.03 }}
@@ -372,7 +362,6 @@ export default function TransactionHistory({ refreshTrigger }) {
                 </motion.button>
               )}
 
-              {/* Cursor Stepper: Previous Page (Pops cursor stack) */}
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -383,7 +372,6 @@ export default function TransactionHistory({ refreshTrigger }) {
                 ← Prev
               </motion.button>
 
-              {/* Cursor Stepper: Next Page (Applies nextCursor) */}
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -398,7 +386,6 @@ export default function TransactionHistory({ refreshTrigger }) {
         )}
       </motion.div>
 
-      {/* Spring Animated Transaction Receipt Modal */}
       <AnimatePresence>
         {selectedTx && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-md">
@@ -409,7 +396,6 @@ export default function TransactionHistory({ refreshTrigger }) {
               transition={{ type: 'spring', damping: 25, stiffness: 300 }}
               className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-md w-full p-6 sm:p-7 shadow-2xl space-y-5"
             >
-              {/* Receipt Header */}
               <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-2.5">
                   <span className="text-2xl">🧾</span>
@@ -428,7 +414,6 @@ export default function TransactionHistory({ refreshTrigger }) {
                 </motion.button>
               </div>
 
-              {/* Amount Highlight */}
               <div className="text-center py-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800">
                 <p className="text-xs text-slate-500 dark:text-slate-400 uppercase font-bold tracking-wider">
                   {selectedTx.direction === 'debit' ? 'Total Debited' : 'Total Credited'}
@@ -450,7 +435,6 @@ export default function TransactionHistory({ refreshTrigger }) {
                 </span>
               </div>
 
-              {/* Ledger Metadata Details */}
               <div className="space-y-3 text-xs">
                 <div className="flex justify-between py-1.5 border-b border-slate-100 dark:border-slate-800">
                   <span className="text-slate-400">Transaction ID</span>

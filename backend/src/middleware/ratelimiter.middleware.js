@@ -2,16 +2,6 @@ import { incrementRateLimit } from '../utils/redis.util.js';
 import { ApiError } from '../utils/ApiError.js';
 import logger from '../config/logger.js';
 
-/**
- * Factory function to create distributed, Redis-backed rate limiting middleware.
- *
- * @param {Object} options
- * @param {string} options.tier - Name of the protected route tier (e.g. 'login', 'transfer')
- * @param {number} options.limit - Maximum number of allowed requests in the window
- * @param {number} options.windowSeconds - Window length in seconds
- * @param {Function} [options.keyGenerator] - Optional custom key generator (defaults to userId || IP)
- * @returns {Function} Express middleware function
- */
 export const createRateLimiter = ({
   tier = 'standard',
   limit = 100,

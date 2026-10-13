@@ -1,9 +1,3 @@
-/**
- * FinFlow Idempotency Assurance Manager
- * Ensures that payment retries, multiple rapid clicks, page reloads, and network drops
- * reuse the exact same Idempotency-Key for a given transfer draft.
- */
-
 export const generateUUID = () => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
     return crypto.randomUUID();
@@ -11,16 +5,6 @@ export const generateUUID = () => {
   return `idem-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 };
 
-/**
- * Get or create a persistent idempotency key for a specific transfer draft.
- * Stored in sessionStorage so page reloads and network disconnect retries
- * reliably send the exact same key to the backend.
- *
- * @param {string} senderId - Sender account UUID
- * @param {string} receiverId - Receiver account UUID
- * @param {number|string} amount - Transfer amount
- * @returns {string} The persistent idempotency key
- */
 export const getOrSetTransferIdempotencyKey = (senderId, receiverId, amount) => {
   if (typeof window === 'undefined') return generateUUID();
 
@@ -38,13 +22,6 @@ export const getOrSetTransferIdempotencyKey = (senderId, receiverId, amount) => 
   return existingKey;
 };
 
-/**
- * Clear the persistent idempotency key from sessionStorage once a transfer completes
- *
- * @param {string} senderId - Sender account UUID
- * @param {string} receiverId - Receiver account UUID
- * @param {number|string} amount - Transfer amount
- */
 export const clearTransferIdempotencyKey = (senderId, receiverId, amount) => {
   if (typeof window === 'undefined') return;
 

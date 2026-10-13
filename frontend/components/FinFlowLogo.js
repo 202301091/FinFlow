@@ -25,7 +25,6 @@ export default function FinFlowLogo({
 
   return (
     <div className={`inline-flex items-center ${current.gap} select-none ${className}`}>
-      {/* Official Authentic Emblem Image */}
       <div
         className="relative shrink-0 flex items-center justify-center p-1 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/80 shadow-sm transition-transform duration-300 group-hover:scale-105"
         style={{ width: current.width, height: current.height }}
@@ -40,7 +39,6 @@ export default function FinFlowLogo({
         />
       </div>
 
-      {/* Brand Typography */}
       {showText && !iconOnly && (
         <div className="flex flex-col text-left leading-none">
           <div className={`font-black tracking-tight ${current.text}`}>

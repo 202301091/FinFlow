@@ -44,13 +44,11 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col justify-between bg-slate-50/70 dark:bg-[#070B14] text-slate-900 dark:text-slate-100 relative overflow-hidden transition-colors duration-300">
-      {/* Background Animated Gradient Mesh Glows */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-[600px] overflow-hidden pointer-events-none -z-10">
         <div className="absolute -top-32 left-1/4 w-[520px] h-[520px] bg-sky-500/10 dark:bg-sky-600/10 rounded-full blur-3xl animate-pulse-glow" />
         <div className="absolute -top-24 right-1/4 w-[480px] h-[480px] bg-blue-600/10 dark:bg-blue-600/10 rounded-full blur-3xl animate-pulse-glow" />
       </div>
 
-      {/* Navigation Header */}
       <motion.header
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -96,7 +94,6 @@ export default function Home() {
         </nav>
       </motion.header>
 
-      {/* Hero Section */}
       <main className="max-w-5xl mx-auto px-6 pt-8 pb-20 text-center flex flex-col items-center justify-center z-10">
         <motion.div
           initial={{ opacity: 0, scale: 0.85, y: -10 }}
@@ -132,7 +129,6 @@ export default function Home() {
           Open and manage multiple distinct accounts with real-time balance tracking in INR, bank-grade encryption, and seamless authentication designed for effortless money management.
         </motion.p>
 
-        {/* Official Logo Banner Showcase with Motion */}
         <motion.div
           initial={{ opacity: 0, scale: 0.94, y: 30 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -152,7 +148,6 @@ export default function Home() {
           </div>
         </motion.div>
 
-        {/* CTA Buttons */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -193,7 +188,6 @@ export default function Home() {
           )}
         </motion.div>
 
-        {/* Interactive Feature Cards with Framer Motion Stagger */}
         <motion.div
           variants={featureContainerVariants}
           initial="hidden"
@@ -250,7 +244,6 @@ export default function Home() {
         </motion.div>
       </main>
 
-      {/* Footer */}
       <footer className="max-w-7xl w-full mx-auto px-6 py-8 border-t border-slate-200 dark:border-slate-800/80 text-center text-xs text-slate-500 dark:text-slate-400 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-2.5">
           <FinFlowLogo size="sm" showText={false} />

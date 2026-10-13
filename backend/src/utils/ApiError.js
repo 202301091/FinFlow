@@ -1,14 +1,4 @@
-/**
- * Custom Error class for standardizing API error responses.
- * Extends the native Error class.
- */
 class ApiError extends Error {
-  /**
-   * @param {number} statusCode - HTTP status code (e.g. 400, 401, 404, 500)
-   * @param {string} [message="Something went wrong"] - Human-readable error message
-   * @param {Array|any} [errors=[]] - Array of specific error details or validation errors
-   * @param {string} [stack=""] - Optional custom stack trace
-   */
   constructor(
     statusCode,
     message = "Something went wrong",

@@ -108,7 +108,6 @@ export default function Navbar({ onOpenTransfer, hasPin: propHasPin }) {
         className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 sticky top-0 z-40 transition-colors duration-300"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          {/* Left: Brand Logo & Desktop Navigation Links */}
           <div className="flex items-center gap-4 sm:gap-8">
             <Link href="/dashboard" className="group shrink-0">
               <div className="hidden sm:block">
@@ -139,7 +138,6 @@ export default function Navbar({ onOpenTransfer, hasPin: propHasPin }) {
             </nav>
           </div>
 
-          {/* Right: Actions, Theme, User Info & Hamburger Toggle */}
           <div className="flex items-center gap-2 sm:gap-3">
             {onOpenTransfer && (
               <motion.button
@@ -194,7 +192,6 @@ export default function Navbar({ onOpenTransfer, hasPin: propHasPin }) {
               Log Out
             </motion.button>
 
-            {/* Mobile Hamburger Menu Toggle Button */}
             <button
               type="button"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -214,7 +211,6 @@ export default function Navbar({ onOpenTransfer, hasPin: propHasPin }) {
           </div>
         </div>
 
-        {/* Animated Mobile Drawer */}
         <AnimatePresence>
           {isMobileMenuOpen && (
             <motion.div

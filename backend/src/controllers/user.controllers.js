@@ -19,6 +19,10 @@ const generateToken = (user) => {
   return { accessToken, refreshToken };
 };
 
+/**
+ * Register a new user
+ * POST /api/v1/users/register
+ */
 const createUser = async (req, res) => {
   const name = req.body.name || req.body.username;
   const { email, password } = req.body;
@@ -51,7 +55,6 @@ const createUser = async (req, res) => {
   }
 
   try {
-    // Check if the user already exists
     const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
 
     if (existingUser.rows.length > 0) {
@@ -70,10 +73,8 @@ const createUser = async (req, res) => {
         .json(new ApiError(409, "User already exists with this email"));
     }
 
-    // Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Insert the new user into the database matching schema.sql columns
     const newUser = await pool.query(
       'INSERT INTO users (name, email, password_hash) VALUES ($1, $2, $3) RETURNING id, name, email, created_at',
       [name, email, hashedPassword]
@@ -81,7 +82,6 @@ const createUser = async (req, res) => {
 
     const createdUser = newUser.rows[0];
 
-    // Record audit log for user registration
     await createAuditLog({
       userId: createdUser.id,
       action: 'USER_REGISTERED',
@@ -103,6 +103,10 @@ const createUser = async (req, res) => {
   }
 };
 
+/**
+ * Authenticate user credentials and issue JWT tokens
+ * POST /api/v1/users/login
+ */
 const loginUser = async (req, res) => {
   const { email, password } = req.body;
 
@@ -113,7 +117,6 @@ const loginUser = async (req, res) => {
   }
 
   try {
-    // Check if the user exists
     const userResult = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
 
     if (userResult.rows.length === 0) {
@@ -134,7 +137,6 @@ const loginUser = async (req, res) => {
 
     const user = userResult.rows[0];
 
-    // Compare the provided password with the hashed password in the database
     const isPasswordValid = await bcrypt.compare(password, user.password_hash || user.password);
 
     if (!isPasswordValid) {
@@ -161,7 +163,6 @@ const loginUser = async (req, res) => {
     loggedInUser.hasPin = Boolean(loggedInUser.transaction_pin_hash);
     delete loggedInUser.transaction_pin_hash;
 
-    // Record audit log for successful login
     await createAuditLog({
       userId: user.id,
       action: 'USER_LOGIN_SUCCESS',

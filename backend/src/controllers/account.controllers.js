@@ -5,6 +5,10 @@ import { createAuditLog } from '../services/audit.service.js';
 import { getCache, setCache, deleteCache } from '../utils/redis.util.js';
 import logger from '../config/logger.js';
 
+/**
+ * Create a new account for the authenticated user
+ * POST /api/v1/accounts
+ */
 const createAccount = async (req, res) => {
     const { account_type, balance } = req.body;
     const user_id = req.user?.id;
@@ -25,7 +29,6 @@ const createAccount = async (req, res) => {
     const normalizedType = account_type.trim().toLowerCase();
 
     try {
-        // Check if user already has an account of this type (enforcing UNIQUE user_id, account_type)
         const existingAccount = await pool.query(
             'SELECT id FROM accounts WHERE user_id = $1 AND account_type = $2',
             [user_id, normalizedType]
@@ -44,7 +47,6 @@ const createAccount = async (req, res) => {
             return res.status(409).json(new ApiError(409, `User already has a ${normalizedType} account`));
         }
 
-        // Insert the new account into the database (PostgreSQL authoritative)
         const newAccount = await pool.query(
             'INSERT INTO accounts (user_id, account_type, balance) VALUES ($1, $2, $3) RETURNING id, user_id, account_type, balance, currency, status, created_at',
             [user_id, normalizedType, initialBalance]
@@ -52,7 +54,6 @@ const createAccount = async (req, res) => {
 
         const createdAccount = newAccount.rows[0];
 
-        // Record audit log for account creation
         await createAuditLog({
             userId: user_id,
             action: 'ACCOUNT_CREATED',
@@ -67,7 +68,6 @@ const createAccount = async (req, res) => {
             },
         });
 
-        // Invalidate cached account lists for this user safely
         await deleteCache(
             `accounts:${user_id}:${normalizedType}`,
             `accounts:${user_id}:all`
@@ -80,6 +80,10 @@ const createAccount = async (req, res) => {
     }
 };
 
+/**
+ * Fetch accounts belonging to the authenticated user with caching
+ * GET /api/v1/accounts
+ */
 const getAccounts = async (req, res) => {
     const user_id = req.user?.id;
     const { account_type } = req.query;
@@ -94,7 +98,6 @@ const getAccounts = async (req, res) => {
             ? `accounts:${user_id}:${normalizedType}`
             : `accounts:${user_id}:all`;
 
-        // 1. Cache Read: Check Redis cache
         const cachedAccounts = await getCache(cacheKey);
 
         if (cachedAccounts) {
@@ -103,7 +106,6 @@ const getAccounts = async (req, res) => {
             );
         }
 
-        // 2. Cache MISS: Query PostgreSQL authoritative source
         let query = 'SELECT id, account_type, balance, currency, status, created_at FROM accounts WHERE user_id = $1';
         const params = [user_id];
 
@@ -116,10 +118,8 @@ const getAccounts = async (req, res) => {
 
         const accounts = await pool.query(query, params);
 
-        // 3. Populate Redis Cache with 60s TTL
         await setCache(cacheKey, accounts.rows, 60);
 
-        // Always return 200 with the array (empty [] if no accounts exist yet)
         return res.status(200).json(new ApiResponse(200, accounts.rows, "Accounts fetched successfully"));
     } catch (error) {
         logger.error({ err: error }, `Error fetching accounts: ${error.message || error}`);

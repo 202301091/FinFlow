@@ -42,10 +42,10 @@ app.use(cors({
     credentials: true,
 }));
 
-app.use(express.json({ limit: '20kb' })); // Use for parsing JSON bodies
-app.use(express.urlencoded({ extended: true, limit: '20kb' })); // Use for parsing URL-encoded bodies
-app.use(express.static('public')); // Serve static files from the 'public' directory
-app.use(cookieParser()); // Use for parsing cookies
+app.use(express.json({ limit: '20kb' }));
+app.use(express.urlencoded({ extended: true, limit: '20kb' }));
+app.use(express.static('public'));
+app.use(cookieParser());
 
 // Liveness probe (shallow, fast, no DB call)
 app.get(['/health', '/health/live'], (req, res) => {

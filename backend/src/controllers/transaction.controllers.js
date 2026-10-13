@@ -28,7 +28,6 @@ export const transferMoney = async (req, res, next) => {
       throw new ApiError(401, 'User authentication required');
     }
 
-    // Extract Idempotency-Key from headers (or fallback to body if provided)
     const idempotencyKey =
       req.header('idempotency-key') ||
       req.header('Idempotency-Key') ||
@@ -42,7 +41,6 @@ export const transferMoney = async (req, res, next) => {
     const trimmedKey = idempotencyKey.trim();
     const { receiverAccountId, amount, description, senderAccountId } = req.body;
 
-    // Validate presence of required fields
     if (!receiverAccountId || typeof receiverAccountId !== 'string' || !receiverAccountId.trim()) {
       throw new ApiError(400, 'Receiver account ID (receiverAccountId) is required');
     }
@@ -73,7 +71,6 @@ export const transferMoney = async (req, res, next) => {
       req.header('x-transaction-pin') ||
       req.header('X-Transaction-PIN');
 
-    // Verify 6-digit Transaction PIN if configured on user's account
     const userResult = await pool.query('SELECT transaction_pin_hash FROM users WHERE id = $1', [userId]);
     const dbUser = userResult.rows[0];
 
@@ -101,7 +98,6 @@ export const transferMoney = async (req, res, next) => {
       throw new ApiError(403, 'Transaction PIN has not been configured. Please set your 6-digit PIN before making transfers');
     }
 
-    // Compute deterministic request hash
     const requestPayload = {
       senderAccountId: trimmedSenderId,
       receiverAccountId: trimmedReceiverId,
@@ -110,7 +106,6 @@ export const transferMoney = async (req, res, next) => {
     };
     const requestHash = computeRequestHash(requestPayload);
 
-    // Coordinate with idempotency record
     const idempotency = await checkOrCreateIdempotencyKey({
       key: trimmedKey,
       userId,
@@ -118,14 +113,12 @@ export const transferMoney = async (req, res, next) => {
       requestHash,
     });
 
-    // If already completed with identical payload, replay cached response
     if (idempotency.isReplay) {
       res.setHeader('Idempotency-Replayed', 'true');
       return res.status(idempotency.responseStatus || 200).json(idempotency.responseBody);
     }
 
     try {
-      // Execute atomic transfer via transaction service
       const result = await transferFunds({
         userId,
         senderAccountId: trimmedSenderId,
@@ -137,7 +130,6 @@ export const transferMoney = async (req, res, next) => {
 
       const responsePayload = new ApiResponse(200, result, 'Transfer completed successfully');
 
-      // Persist successful response in idempotency_keys
       await markIdempotencyCompleted({
         key: trimmedKey,
         userId,
@@ -145,7 +137,6 @@ export const transferMoney = async (req, res, next) => {
         responseBody: responsePayload,
       });
 
-      // Record immutable audit log for completed transfer
       await createAuditLog({
         userId,
         action: 'TRANSFER_COMPLETED',
@@ -162,13 +153,10 @@ export const transferMoney = async (req, res, next) => {
         },
       });
 
-
       return res.status(200).json(responsePayload);
     } catch (transferError) {
-      // Mark key failed so future attempts or retries can be processed cleanly
       await markIdempotencyFailed({ key: trimmedKey, userId });
 
-      // Record audit log for failed transfer attempt
       await createAuditLog({
         userId,
         action: 'TRANSFER_FAILED',
@@ -233,7 +221,6 @@ export const getTransactionDetails = async (req, res, next) => {
 
     const { id } = req.params;
 
-    // Get transaction from cache if available
     const cacheKey = `transaction:${userId}:${id}`;
     const cachedTransaction = await getCache(cacheKey);
 
@@ -248,7 +235,6 @@ export const getTransactionDetails = async (req, res, next) => {
       transactionId: id,
     });
 
-    // Cache the transaction details for future requests (5 minutes)
     await setCache(cacheKey, transaction, 300);
 
     return res

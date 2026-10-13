@@ -166,7 +166,6 @@ export default function TransferModal({ isOpen, onClose, accounts = [], onSucces
             transition={{ duration: 0.25, ease: 'easeOut' }}
             className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative my-auto max-h-[90vh] overflow-y-auto"
           >
-            {/* Header */}
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800 flex items-center justify-center text-xl">
@@ -188,7 +187,6 @@ export default function TransferModal({ isOpen, onClose, accounts = [], onSucces
               </button>
             </div>
 
-            {/* Error Banner */}
             {errorMessage && (
               <motion.div
                 initial={{ opacity: 0, y: -5 }}
@@ -211,9 +209,7 @@ export default function TransferModal({ isOpen, onClose, accounts = [], onSucces
               </motion.div>
             )}
 
-            {/* Form */}
             <form onSubmit={handleSubmit} className="mt-5 space-y-4">
-              {/* Sender Account */}
               {accounts.length > 1 && (
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
@@ -238,7 +234,6 @@ export default function TransferModal({ isOpen, onClose, accounts = [], onSucces
                 </div>
               )}
 
-              {/* Receiver Account ID */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
@@ -270,7 +265,6 @@ export default function TransferModal({ isOpen, onClose, accounts = [], onSucces
                 )}
               </div>
 
-              {/* Amount */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
@@ -310,7 +304,6 @@ export default function TransferModal({ isOpen, onClose, accounts = [], onSucces
                 )}
               </div>
 
-              {/* Description */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5 uppercase tracking-wider">
                   Description / Memo (Optional)
@@ -326,7 +319,6 @@ export default function TransferModal({ isOpen, onClose, accounts = [], onSucces
                 />
               </div>
 
-              {/* 6-Digit Security PIN */}
               <div className="pt-1">
                 {!effectiveHasPin ? (
                   <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-950 dark:text-amber-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -398,7 +390,6 @@ export default function TransferModal({ isOpen, onClose, accounts = [], onSucces
                 )}
               </div>
 
-              {/* Actions */}
               <div className="pt-3 flex items-center justify-end gap-3">
                 <button
                   type="button"
@@ -442,7 +433,6 @@ export default function TransferModal({ isOpen, onClose, accounts = [], onSucces
         </div>
       </AnimatePresence>
 
-      {/* Set / Update PIN Modal */}
       <SetPinModal
         isOpen={showSetPinModal}
         onClose={() => setShowSetPinModal(false)}

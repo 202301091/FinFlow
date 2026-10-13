@@ -2,19 +2,6 @@ import { pool } from '../config/db.js';
 import { kafkaProducer, connectProducer, isKafkaAvailable, KAFKA_TOPICS } from '../config/kafka.js';
 import logger from '../config/logger.js';
 
-/**
- * Persist an event into the transaction_outbox table.
- * MUST be executed within an existing PostgreSQL transaction client for atomicity.
- *
- * @param {Object} params
- * @param {import('pg').PoolClient} params.client - Active PostgreSQL transaction client
- * @param {string} [params.aggregateType='TRANSACTION'] - Entity type
- * @param {string} params.aggregateId - UUID of the primary entity
- * @param {string} params.eventType - Event identifier (e.g. 'TRANSACTION_COMPLETED')
- * @param {Object} params.payload - Full domain event payload JSON
- * @param {string} params.partitionKey - Key for Kafka partition routing (e.g. senderAccountId)
- * @returns {Promise<Object>} Created outbox record
- */
 export const writeOutboxEvent = async ({
   client,
   aggregateType = 'TRANSACTION',
@@ -46,15 +33,6 @@ export const writeOutboxEvent = async ({
   return result.rows[0];
 };
 
-/**
- * Send a single serialized message directly to a Kafka topic.
- *
- * @param {Object} params
- * @param {string} [params.topic=KAFKA_TOPICS.TRANSACTIONS] - Target Kafka topic
- * @param {string} params.key - Partitioning key
- * @param {Object} params.event - Event object
- * @returns {Promise<boolean>} True if published, false if failed
- */
 export const publishEventToKafka = async ({
   topic = KAFKA_TOPICS.TRANSACTIONS,
   key,
@@ -88,16 +66,7 @@ export const publishEventToKafka = async ({
   }
 };
 
-/**
- * Poll and dispatch pending events from transaction_outbox to Kafka.
- * Uses FOR UPDATE SKIP LOCKED to allow concurrent workers to poll without collision.
- *
- * @param {Object} options
- * @param {number} [options.limit=50] - Maximum records to process per batch
- * @returns {Promise<number>} Number of successfully published events
- */
 export const processPendingOutboxEvents = async ({ limit = 50 } = {}) => {
-  // If Kafka broker is unavailable, fast-exit to preserve DB resources (circuit breaker)
   const isReady = await connectProducer();
   if (!isReady) {
     return 0;
@@ -171,12 +140,6 @@ export const processPendingOutboxEvents = async ({ limit = 50 } = {}) => {
 
 let relayIntervalId = null;
 
-/**
- * Start the background Outbox Relay polling service.
- *
- * @param {Object} options
- * @param {number} [options.intervalMs=3000] - Polling interval in milliseconds
- */
 export const startOutboxRelay = ({ intervalMs = 3000 } = {}) => {
   if (relayIntervalId) return;
 
@@ -188,15 +151,11 @@ export const startOutboxRelay = ({ intervalMs = 3000 } = {}) => {
     }
   }, intervalMs);
 
-  // Prevent background interval from keeping process alive on exit
   if (relayIntervalId.unref) {
     relayIntervalId.unref();
   }
 };
 
-/**
- * Stop the background Outbox Relay service.
- */
 export const stopOutboxRelay = () => {
   if (relayIntervalId) {
     clearInterval(relayIntervalId);

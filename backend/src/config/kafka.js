@@ -108,14 +108,6 @@ export const disconnectProducer = async () => {
   }
 };
 
-/**
- * Helper to create a new Kafka consumer instance for a worker group.
- *
- * @param {Object} options
- * @param {string} options.groupId - Consumer group identifier
- * @param {boolean} [options.allowAutoTopicCreation=true]
- * @returns {import('kafkajs').Consumer}
- */
 export const createConsumer = ({ groupId, allowAutoTopicCreation = true }) => {
   if (!groupId || typeof groupId !== 'string') {
     throw new Error('[Kafka] Valid groupId is required to create a consumer');
@@ -131,30 +123,15 @@ export const createConsumer = ({ groupId, allowAutoTopicCreation = true }) => {
   });
 };
 
-/**
- * Canonical topic definitions
- */
 export const KAFKA_TOPICS = {
   TRANSACTIONS: process.env.KAFKA_TOPIC_TRANSACTIONS || 'transaction-events',
 };
 
-/**
- * Standard Consumer Group identifiers
- */
 export const KAFKA_CONSUMER_GROUPS = {
   NOTIFICATIONS: process.env.KAFKA_GROUP_NOTIFICATIONS || 'finflow-notifications-group',
   FRAUD: process.env.KAFKA_GROUP_FRAUD || 'finflow-fraud-group',
 };
 
-/**
- * Admin helper to verify or initialize a topic with specified partitions.
- *
- * @param {Object} options
- * @param {string} [options.topic=KAFKA_TOPICS.TRANSACTIONS]
- * @param {number} [options.numPartitions=3]
- * @param {number} [options.replicationFactor=1]
- * @returns {Promise<boolean>}
- */
 export const ensureTopicExists = async ({
   topic = KAFKA_TOPICS.TRANSACTIONS,
   numPartitions = 3,

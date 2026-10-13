@@ -1,23 +1,12 @@
-/**
- * Standardized API response format for successful operations.
- */
 class ApiResponse {
-  /**
-   * @param {number} statusCode - HTTP status code (e.g. 200, 201)
-   * @param {any} [data=null] - Payload to return to the client
-   * @param {string} [message="Success"] - Response message
-   */
   constructor(statusCode, data = null, message = "Success") {
     this.statusCode = statusCode;
-    this.statuscode = statusCode; // Alias for backward compatibility
+    this.statuscode = statusCode;
     this.data = data;
     this.message = message;
     this.success = statusCode < 400;
   }
 
-  /**
-   * Ensure clean JSON serialization.
-   */
   toJSON() {
     return {
       statusCode: this.statusCode,

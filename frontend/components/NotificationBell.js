@@ -188,7 +188,6 @@ export default function NotificationBell({ className = '' }) {
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
-      {/* Bell Button */}
       <button
         onClick={() => setIsOpen((prev) => !prev)}
         type="button"
@@ -210,7 +209,6 @@ export default function NotificationBell({ className = '' }) {
           />
         </svg>
 
-        {/* Unread Badge */}
         {unreadCount > 0 && (
           <span className="absolute -top-1 -right-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-white dark:ring-slate-900">
             {unreadCount > 9 ? '9+' : unreadCount}
@@ -218,7 +216,6 @@ export default function NotificationBell({ className = '' }) {
         )}
       </button>
 
-      {/* Dropdown Menu */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -228,7 +225,6 @@ export default function NotificationBell({ className = '' }) {
             transition={{ duration: 0.18, ease: 'easeOut' }}
             className="absolute right-0 mt-2.5 w-80 sm:w-96 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-2xl z-50 overflow-hidden"
           >
-            {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
               <div className="flex items-center gap-2">
                 <span className="font-bold text-sm text-slate-800 dark:text-slate-100">
@@ -251,7 +247,6 @@ export default function NotificationBell({ className = '' }) {
               )}
             </div>
 
-            {/* List */}
             <div className="max-h-[380px] overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60">
               {loading ? (
                 <div className="p-6 text-center text-xs text-slate-400">
@@ -310,14 +305,12 @@ export default function NotificationBell({ className = '' }) {
                           : 'bg-sky-50/40 dark:bg-sky-950/20 hover:bg-sky-50/80 dark:hover:bg-sky-950/40'
                       }`}
                     >
-                      {/* Icon */}
                       <div
                         className={`w-8 h-8 rounded-xl shrink-0 flex items-center justify-center text-sm font-bold ${badgeBg}`}
                       >
                         {badgeIcon}
                       </div>
 
-                      {/* Content */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1">
                           <p
@@ -340,7 +333,6 @@ export default function NotificationBell({ className = '' }) {
                         </p>
                       </div>
 
-                      {/* Unread indicator */}
                       {!notif.is_read && (
                         <div
                           className={`w-2 h-2 rounded-full shrink-0 mt-1.5 ${
@@ -357,7 +349,6 @@ export default function NotificationBell({ className = '' }) {
         )}
       </AnimatePresence>
 
-      {/* Real-time Toast Pop-up Notification */}
       <AnimatePresence>
         {toast && (
           <motion.div

@@ -2,10 +2,6 @@ import crypto from 'crypto';
 import { pool } from '../config/db.js';
 import { ApiError } from '../utils/ApiError.js';
 
-/**
- * Deterministically compute a SHA-256 hash of the request parameters.
- * Keys are sorted so property order does not affect the resulting hash.
- */
 export const computeRequestHash = (payload) => {
   if (!payload || typeof payload !== 'object') {
     return crypto.createHash('sha256').update(String(payload || '')).digest('hex');
@@ -20,16 +16,6 @@ export const computeRequestHash = (payload) => {
   return crypto.createHash('sha256').update(JSON.stringify(sortedObj)).digest('hex');
 };
 
-/**
- * Verify or initialize an idempotency key.
- *
- * @param {Object} params
- * @param {string} params.key - The idempotency key from header
- * @param {string} params.userId - Authenticated user ID
- * @param {string} params.requestPath - e.g. '/api/v1/transactions/transfer'
- * @param {string} params.requestHash - SHA-256 of request payload
- * @returns {Promise<{ isReplay: boolean, responseStatus?: number, responseBody?: any }>}
- */
 export const checkOrCreateIdempotencyKey = async ({ key, userId, requestPath, requestHash }) => {
   // Attempt atomic insert with 'in_progress' status
   const insertResult = await pool.query(
@@ -96,9 +82,6 @@ export const checkOrCreateIdempotencyKey = async ({ key, userId, requestPath, re
   return { isReplay: false };
 };
 
-/**
- * Mark idempotency record as completed with response payload
- */
 export const markIdempotencyCompleted = async ({ key, userId, statusCode, responseBody }) => {
   await pool.query(
     `UPDATE idempotency_keys
@@ -111,9 +94,6 @@ export const markIdempotencyCompleted = async ({ key, userId, statusCode, respon
   );
 };
 
-/**
- * Mark idempotency record as failed to allow clean retry
- */
 export const markIdempotencyFailed = async ({ key, userId }) => {
   await pool.query(
     `UPDATE idempotency_keys

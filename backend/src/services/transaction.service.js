@@ -7,18 +7,6 @@ import { createTransactionCompletedEvent } from '../events/transaction.event.js'
 import { writeOutboxEvent, processPendingOutboxEvents } from './outbox.service.js';
 import logger from '../config/logger.js';
 import { transactionsTotal, transactionAmountTotal } from '../config/metrics.js';
-/**
- * Execute an atomic financial transfer between two accounts.
- *
- * @param {Object} params
- * @param {string} params.userId - Authenticated user's ID
- * @param {string} [params.senderAccountId] - Optional specific sender account ID owned by userId
- * @param {string} params.receiverAccountId - Destination account ID
- * @param {number} params.amount - Positive transfer amount
- * @param {string} [params.description] - Purpose/memo for the transaction
- * @param {string} [params.requestId] - Optional unique request tracing identifier
- * @returns {Promise<Object>} The completed transaction record with balances
- */
 export const transferFunds = async ({
   userId,
   senderAccountId,
@@ -27,7 +15,6 @@ export const transferFunds = async ({
   description = null,
   requestId = null,
 }) => {
-  // 1. Basic input validation
   if (!senderAccountId || typeof senderAccountId !== 'string' || !senderAccountId.trim()) {
     throw new ApiError(400, 'A valid sender account ID is required');
   }
@@ -48,7 +35,6 @@ export const transferFunds = async ({
     throw new ApiError(400, 'Transfer amount must be a positive number greater than zero');
   }
 
-  // Ensure amount has at most 2 decimal places
   if (!/^\d+(\.\d{1,2})?$/.test(String(amount))) {
     throw new ApiError(400, 'Transfer amount can have at most 2 decimal places');
   }
@@ -56,10 +42,8 @@ export const transferFunds = async ({
   const client = await pool.connect();
 
   try {
-    // 2. Begin database transaction
     await client.query('BEGIN');
 
-    // 3. Resolve and verify sender account belongs to authenticated user
     const senderLookup = await client.query(
       'SELECT id, user_id, status FROM accounts WHERE id = $1',
       [trimmedSenderId]
@@ -79,13 +63,11 @@ export const transferFunds = async ({
 
     const resolvedSenderId = senderLookup.rows[0].id;
 
-    // 4. Validate sender and receiver are distinct
     if (resolvedSenderId === trimmedReceiverId) {
       throw new ApiError(400, 'Sender and receiver accounts cannot be the same');
     }
 
-    // 5. Deadlock-free row-level locking:
-    // Lock both accounts in deterministic lexicographical order of their UUIDs
+    // Deadlock-free row-level locking: sort UUIDs deterministically
     const [firstId, secondId] = [resolvedSenderId, trimmedReceiverId].sort();
 
     const lockedAccountsResult = await client.query(
@@ -121,7 +103,6 @@ export const transferFunds = async ({
       throw new ApiError(400, 'Receiver account is not active');
     }
 
-    // 6. Balance verification under row lock
     const currentSenderBalance = parseFloat(senderAccount.balance);
     if (currentSenderBalance < transferAmount) {
       throw new ApiError(
@@ -130,7 +111,6 @@ export const transferFunds = async ({
       );
     }
 
-    // 7. Debit sender account
     const debitResult = await client.query(
       `UPDATE accounts 
        SET balance = balance - $1, updated_at = CURRENT_TIMESTAMP 
@@ -139,7 +119,6 @@ export const transferFunds = async ({
       [transferAmount, resolvedSenderId]
     );
 
-    // 8. Credit receiver account
     const creditResult = await client.query(
       `UPDATE accounts 
        SET balance = balance + $1, updated_at = CURRENT_TIMESTAMP 
@@ -148,7 +127,6 @@ export const transferFunds = async ({
       [transferAmount, receiverAccountId]
     );
 
-    // 9. Insert transaction record into ledger
     const transactionInsert = await client.query(
       `INSERT INTO transactions (
          sender_account_id,
@@ -168,7 +146,7 @@ export const transferFunds = async ({
       ]
     );
 
-    // 9.5. Write TRANSACTION_COMPLETED event to Transactional Outbox (same atomic boundary)
+    // Write event to Transactional Outbox within the same atomic boundary
     const completedEvent = createTransactionCompletedEvent({
       transaction: transactionInsert.rows[0],
       senderUserId: userId,
@@ -189,10 +167,8 @@ export const transferFunds = async ({
       partitionKey: resolvedSenderId,
     });
 
-    // 10. Commit the transaction to disk (authoritative state confirmed)
     await client.query('COMMIT');
 
-    // 11. Invalidate affected account caches for both sender and receiver
     await deleteCache(
       `accounts:${userId}:${senderAccount.account_type}`,
       `accounts:${userId}:all`,
@@ -200,7 +176,6 @@ export const transferFunds = async ({
       `accounts:${receiverAccount.user_id}:all`
     );
 
-    // 12. Dispatch transfer notifications to both sender and receiver
     try {
       await createTransferNotifications({
         transaction: transactionInsert.rows[0],
@@ -216,7 +191,6 @@ export const transferFunds = async ({
       logger.warn({ err: notifErr }, `[TransferService] Post-commit notification error: ${notifErr.message}`);
     }
 
-    // 13. Post-commit fraud surveillance and manual inspection queue
     try {
       await evaluateAndRecordTransferRisk({
         senderAccountId: resolvedSenderId,
@@ -230,14 +204,10 @@ export const transferFunds = async ({
       logger.warn({ err: fraudErr }, `[TransferService] Post-commit fraud evaluation error: ${fraudErr.message}`);
     }
 
-    // 14. Trigger immediate Outbox Relay flush to Kafka (fail-safe)
     processPendingOutboxEvents({ limit: 20 }).catch((outboxErr) => {
       logger.warn({ err: outboxErr }, `[TransferService] Post-commit outbox flush warning: ${outboxErr.message}`);
     });
 
-
-
-    // 15. Record Prometheus metrics for successful transfer
     try {
       transactionsTotal.inc({ status: 'success' });
       transactionAmountTotal.inc(
@@ -261,7 +231,6 @@ export const transferFunds = async ({
     try {
       transactionsTotal.inc({ status: 'failed' });
     } catch {}
-    // 11. Roll back all tentative updates if anything failed
     try {
       await client.query('ROLLBACK');
     } catch (rollbackError) {
@@ -269,21 +238,10 @@ export const transferFunds = async ({
     }
     throw error;
   } finally {
-    // 12. Always release the connection back to the pool
     client.release();
   }
 };
 
-/**
- * Retrieve paginated transaction history for the authenticated user
- *
- * @param {Object} params
- * @param {string} params.userId - Authenticated user's ID
- * @param {number} [params.page=1] - Page number (1-based)
- * @param {number} [params.limit=10] - Number of records per page
- * @param {string} [params.accountId] - Optional specific account filter
- * @returns {Promise<Object>} Object containing transactions array and pagination metadata
- */
 export const getTransactionHistory = async ({
   userId,
   page = null,
@@ -415,14 +373,6 @@ export const getTransactionHistory = async ({
   };
 };
 
-/**
- * Retrieve transaction details by ID with strict ownership authorization
- *
- * @param {Object} params
- * @param {string} params.userId - Authenticated user's ID
- * @param {string} params.transactionId - Transaction UUID
- * @returns {Promise<Object>} Formatted transaction object
- */
 export const getTransactionById = async ({ userId, transactionId }) => {
   // Validate UUID format
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

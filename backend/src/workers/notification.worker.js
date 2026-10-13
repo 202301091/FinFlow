@@ -18,12 +18,6 @@ const __filename = fileURLToPath(import.meta.url);
 let consumerInstance = null;
 let isShuttingDown = false;
 
-/**
- * Format notifications for sender and receiver accounts from a transaction event.
- *
- * @param {Object} event - Valid TRANSACTION_COMPLETED domain event
- * @returns {{ senderNotification: Object, receiverNotification: Object }}
- */
 export const formatNotification = (event) => {
   const {
     transactionId,
@@ -70,15 +64,7 @@ export const formatNotification = (event) => {
   return { senderNotification, receiverNotification };
 };
 
-/**
- * Dispatch an individual notification payload to downstream channels.
- * In production, this integrates with AWS SNS, Twilio, SendGrid, FCM, etc.
- *
- * @param {Object} notification
- * @returns {Promise<Object>} Delivery confirmation
- */
 export const dispatchNotification = async (notification) => {
-  // Structured logging for audit trails and monitoring
   logger.info(
     `[Notification Worker] [${notification.type}] Account: ${notification.recipientAccountId} | ${notification.message}`
   );
@@ -92,12 +78,6 @@ export const dispatchNotification = async (notification) => {
   };
 };
 
-/**
- * Process a single domain event payload.
- *
- * @param {Object} event
- * @returns {Promise<Object>} Processing summary
- */
 export const processNotificationEvent = async (event) => {
   if (!isValidTransactionCompletedEvent(event)) {
     logger.warn({ eventType: event?.eventType }, `[Notification Worker] Ignored malformed or unrecognized event payload: ${event?.eventType || 'UNKNOWN'}`);
@@ -131,14 +111,6 @@ export const processNotificationEvent = async (event) => {
   };
 };
 
-/**
- * KafkaJS message handler for notification consumer.
- *
- * @param {Object} payload
- * @param {string} payload.topic
- * @param {number} payload.partition
- * @param {import('kafkajs').KafkaMessage} payload.message
- */
 export const handleNotificationMessage = async ({ topic, partition, message }) => {
   let parsedEvent = null;
   try {
@@ -184,14 +156,6 @@ export const handleNotificationMessage = async ({ topic, partition, message }) =
   }
 };
 
-/**
- * Start the notification consumer worker.
- *
- * @param {Object} [options]
- * @param {string} [options.groupId=KAFKA_CONSUMER_GROUPS.NOTIFICATIONS]
- * @param {string} [options.topic=KAFKA_TOPICS.TRANSACTIONS]
- * @returns {Promise<import('kafkajs').Consumer>}
- */
 export const startNotificationWorker = async ({
   groupId = KAFKA_CONSUMER_GROUPS.NOTIFICATIONS,
   topic = KAFKA_TOPICS.TRANSACTIONS,
