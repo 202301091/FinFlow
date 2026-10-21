@@ -19,6 +19,7 @@ export const initDb = async () => {
     // and ensure users table has transaction_pin_hash
     await pool.query(`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS transaction_pin_hash TEXT;
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS is_email_verified BOOLEAN DEFAULT TRUE;
       ALTER TABLE transactions DROP COLUMN IF EXISTS idempotency_key;
       DROP INDEX IF EXISTS idx_idempotency_lookup;
       DO $$
@@ -29,6 +30,20 @@ export const initDb = async () => {
           ALTER TABLE accounts ADD CONSTRAINT chk_non_negative_balance CHECK (balance >= 0);
         END IF;
       END $$;
+
+      DROP TABLE IF EXISTS password_resets;
+
+      CREATE TABLE IF NOT EXISTS email_verifications (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          email VARCHAR(255) NOT NULL,
+          otp VARCHAR(10) NOT NULL,
+          type VARCHAR(50) NOT NULL,
+          expires_at TIMESTAMP NOT NULL,
+          used BOOLEAN NOT NULL DEFAULT FALSE,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_email_verifications_email ON email_verifications(email, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_email_verifications_lookup ON email_verifications(email, otp, type, used);
     `);
 
     logger.info('✓ Database tables, constraints, and schema updated successfully!');

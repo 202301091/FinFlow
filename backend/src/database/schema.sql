@@ -152,3 +152,17 @@ CREATE TABLE IF NOT EXISTS consumer_dlq (
 );
 
 CREATE INDEX IF NOT EXISTS idx_dlq_group ON consumer_dlq(consumer_group, created_at DESC);
+
+-- Unified Email Verification OTPs (Registration, Password Reset, Security Actions)
+CREATE TABLE IF NOT EXISTS email_verifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) NOT NULL,
+    otp VARCHAR(10) NOT NULL,
+    type VARCHAR(50) NOT NULL, -- 'REGISTRATION', 'PASSWORD_RESET'
+    expires_at TIMESTAMP NOT NULL,
+    used BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_email_verifications_email ON email_verifications(email, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_email_verifications_lookup ON email_verifications(email, otp, type, used);

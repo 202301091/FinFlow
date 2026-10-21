@@ -142,6 +142,7 @@ FinFlow/
 │   │   ├── dashboard/       # Main overview with account cards & balances
 │   │   ├── transactions/    # Ledger audit history with keyset cursor pagination
 │   │   ├── create-account/  # Form to open savings/checking/investment accounts
+│   │   ├── forgot-password/ # 6-digit OTP password reset & recovery
 │   │   ├── login/           # User authentication
 │   │   ├── signup/          # User registration with password security rules
 │   │   └── page.js          # Marketing landing page
@@ -170,14 +171,19 @@ The database schema is defined in [`backend/src/database/schema.sql`](backend/sr
 | `notifications` | User notification records and unread state |
 | `fraud_evaluations` | Risk scores, heuristic trigger logs, and compliance review flags |
 | `audit_logs` | Security and administrative audit trail with sensitive credential redaction |
+| `email_verifications` | Unified 6-digit verification codes for Account Registration & Password Resets (with 15-min TTL & replay protection) |
 
 ---
 
 ## API Overview
 
 ### Authentication & Users
-- `POST /api/v1/users/register` - Create a user account
+- `POST /api/v1/users/send-registration-otp` - Send 6-digit OTP to verify email ownership before creating an account
+- `POST /api/v1/users/register` - Create user account with verified email OTP
 - `POST /api/v1/users/login` - Authenticate and receive JWT
+- `POST /api/v1/users/forgot-password` - Request 6-digit password reset OTP (Redis/DB cached)
+- `POST /api/v1/users/verify-reset-otp` - Verify 6-digit password reset OTP
+- `POST /api/v1/users/reset-password` - Securely reset account password with valid OTP
 - `POST /api/v1/users/set-pin` - Configure or update 6-digit transaction PIN
 - `GET /api/v1/users/pin-status` - Check if user has an active transaction PIN
 

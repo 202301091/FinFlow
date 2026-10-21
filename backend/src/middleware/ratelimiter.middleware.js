@@ -83,6 +83,12 @@ export const transferRateLimiter = createRateLimiter({
   windowSeconds: Number(process.env.RATE_LIMIT_TRANSFER_WINDOW) || 60,
 });
 
+export const forgotPasswordRateLimiter = createRateLimiter({
+  tier: 'forgot-password',
+  limit: Number(process.env.RATE_LIMIT_FORGOT_PASSWORD_MAX) || 10,
+  windowSeconds: Number(process.env.RATE_LIMIT_FORGOT_PASSWORD_WINDOW) || 60,
+});
+
 export const standardRateLimiter = createRateLimiter({
   tier: 'general',
   limit: Number(process.env.RATE_LIMIT_GLOBAL_MAX) || 100,
