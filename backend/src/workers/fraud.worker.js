@@ -11,6 +11,7 @@ import {
 } from '../events/transaction.event.js';
 import { markEventProcessed } from '../services/consumerIdempotency.service.js';
 import { executeWithRetry, recordDeadLetter } from '../services/consumerRetry.service.js';
+import { evaluateAndRecordTransferRisk } from '../services/fraud.service.js';
 import logger from '../config/logger.js';
 import { fraudAlertsTotal } from '../config/metrics.js';
 
@@ -152,6 +153,22 @@ export const processFraudEvent = async (event) => {
     return { flagged: false, duplicate: true, eventId: event.eventId };
   }
 
+  // 1. Evaluate historical database risk and persist record into fraud_evaluations ledger
+  let ledgerRecord = null;
+  try {
+    ledgerRecord = await evaluateAndRecordTransferRisk({
+      senderAccountId: event.data.senderAccountId,
+      receiverAccountId: event.data.receiverAccountId,
+      userId: event.data.senderUserId,
+      amount: event.data.amount,
+      transaction: { id: event.data.transactionId },
+      requestId: event.metadata?.requestId,
+    });
+  } catch (err) {
+    logger.warn({ err, eventId: event.eventId }, `[Fraud Worker] Error recording fraud ledger: ${err.message}`);
+  }
+
+  // 2. In-worker fast velocity & rules check
   const evaluation = evaluateFraudRules(event);
 
   if (evaluation.isSuspicious) {
@@ -160,12 +177,14 @@ export const processFraudEvent = async (event) => {
       flagged: true,
       alert,
       evaluation,
+      ledgerRecord,
     };
   }
 
   return {
     flagged: false,
     evaluation,
+    ledgerRecord,
   };
 };
 

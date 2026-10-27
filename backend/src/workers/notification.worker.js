@@ -11,6 +11,8 @@ import {
 } from '../events/transaction.event.js';
 import { markEventProcessed } from '../services/consumerIdempotency.service.js';
 import { executeWithRetry, recordDeadLetter } from '../services/consumerRetry.service.js';
+import { createTransferNotifications } from '../services/notification.service.js';
+import { markOutboxProcessed } from '../services/outbox.service.js';
 import logger from '../config/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -98,15 +100,37 @@ export const processNotificationEvent = async (event) => {
 
   const { senderNotification, receiverNotification } = formatNotification(event);
 
+  // 1. Create real database records in PostgreSQL and broadcast to Redis Pub/Sub for live SSE
+  let dbNotifications = null;
+  try {
+    dbNotifications = await createTransferNotifications({
+      transaction: { id: event.data.transactionId },
+      senderUserId: event.data.senderUserId,
+      receiverUserId: event.data.receiverUserId,
+      senderAccount: { id: event.data.senderAccountId, account_type: 'savings' },
+      receiverAccount: { id: event.data.receiverAccountId, account_type: 'savings' },
+      amount: event.data.amount,
+      currency: event.data.currency || 'INR',
+      description: event.data.description,
+    });
+  } catch (notifErr) {
+    logger.warn({ err: notifErr, eventId: event.eventId }, `[Notification Worker] Error persisting notifications to database: ${notifErr.message}`);
+  }
+
+  // 2. Dispatch simulated / channel notifications (logging, SMS, Email)
   const [senderResult, receiverResult] = await Promise.all([
     dispatchNotification(senderNotification),
     dispatchNotification(receiverNotification),
   ]);
 
+  // 3. Update transactional outbox record status to PROCESSED
+  await markOutboxProcessed(event.data.transactionId);
+
   return {
     processed: true,
     eventId: event.eventId,
     transactionId: event.data.transactionId,
+    dbNotifications,
     deliveries: [senderResult, receiverResult],
   };
 };

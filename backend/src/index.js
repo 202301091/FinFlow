@@ -4,6 +4,7 @@ dotenv.config({ path: './.env' });
 import { connectDB, pool } from './config/db.js';
 import { connectRedis, disconnectRedis } from './config/redis.js';
 import { disconnectProducer } from './config/kafka.js';
+import { startOutboxRelay, stopOutboxRelay } from './services/outbox.service.js';
 import app from './app.js';
 import logger from './config/logger.js';
 
@@ -11,6 +12,7 @@ const startServer = async () => {
   try {
     await connectDB();
     await connectRedis();
+    startOutboxRelay({ intervalMs: 3000 });
 
     app.on('error', (err) => {
       logger.error(`Server error: ${err.message}`);
@@ -42,6 +44,7 @@ const startServer = async () => {
         }
 
         try {
+          stopOutboxRelay();
           await disconnectProducer();
           await disconnectRedis();
           await pool.end();

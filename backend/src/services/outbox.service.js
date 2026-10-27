@@ -162,3 +162,27 @@ export const stopOutboxRelay = () => {
     relayIntervalId = null;
   }
 };
+
+/**
+ * Mark an outbox entry as PROCESSED once downstream Kafka workers finish handling it.
+ *
+ * @param {string} aggregateId - The aggregate ID (transactionId)
+ * @param {object} client - Optional pg client or pool
+ * @returns {Promise<object|null>}
+ */
+export const markOutboxProcessed = async (aggregateId, client = pool) => {
+  if (!aggregateId) return null;
+  try {
+    const res = await client.query(
+      `UPDATE transaction_outbox
+       SET status = 'PROCESSED'
+       WHERE aggregate_id = $1 AND status != 'PROCESSED'
+       RETURNING id, aggregate_id, status`,
+      [aggregateId]
+    );
+    return res.rows[0] || null;
+  } catch (error) {
+    logger.warn({ err: error, aggregateId }, `[Outbox] Failed to mark outbox as PROCESSED: ${error.message}`);
+    return null;
+  }
+};

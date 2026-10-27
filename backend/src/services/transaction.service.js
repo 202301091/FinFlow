@@ -1,8 +1,6 @@
 import { pool } from '../config/db.js';
 import { ApiError } from '../utils/ApiError.js';
 import { deleteCache } from '../utils/redis.util.js';
-import { createTransferNotifications } from './notification.service.js';
-import { evaluateAndRecordTransferRisk } from './fraud.service.js';
 import { createTransactionCompletedEvent } from '../events/transaction.event.js';
 import { writeOutboxEvent, processPendingOutboxEvents } from './outbox.service.js';
 import logger from '../config/logger.js';
@@ -176,34 +174,8 @@ export const transferFunds = async ({
       `accounts:${receiverAccount.user_id}:all`
     );
 
-    try {
-      await createTransferNotifications({
-        transaction: transactionInsert.rows[0],
-        senderUserId: userId,
-        receiverUserId: receiverAccount.user_id,
-        senderAccount,
-        receiverAccount,
-        amount: transferAmount,
-        currency: senderAccount.currency || 'INR',
-        description,
-      });
-    } catch (notifErr) {
-      logger.warn({ err: notifErr }, `[TransferService] Post-commit notification error: ${notifErr.message}`);
-    }
-
-    try {
-      await evaluateAndRecordTransferRisk({
-        senderAccountId: resolvedSenderId,
-        receiverAccountId,
-        userId,
-        amount: transferAmount,
-        transaction: transactionInsert.rows[0],
-        requestId,
-      });
-    } catch (fraudErr) {
-      logger.warn({ err: fraudErr }, `[TransferService] Post-commit fraud evaluation error: ${fraudErr.message}`);
-    }
-
+    // Asynchronously trigger Kafka outbox dispatch without blocking client response.
+    // Downstream Kafka consumer workers handle notifications and fraud evaluations.
     processPendingOutboxEvents({ limit: 20 }).catch((outboxErr) => {
       logger.warn({ err: outboxErr }, `[TransferService] Post-commit outbox flush warning: ${outboxErr.message}`);
     });
